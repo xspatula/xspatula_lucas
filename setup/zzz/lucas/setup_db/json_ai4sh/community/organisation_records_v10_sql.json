@@ -1,0 +1,72 @@
+{
+  "process": [
+    {
+      "process_id": "table_insert",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "community",
+        "table": "organisation",
+        "command": {
+          "columns": [
+            "id",
+            "name",
+            "alias",
+            "url",
+            "contact_email",
+            "address1",
+            "postal_address",
+            "postal_zip_code",
+            "territory_id__territory_name"
+          ],
+          "values": [
+            [
+              "0",
+              "None",
+              "None",
+              "https://example.com",
+              "none@example.com",
+              "None",
+              "None",
+              "None",
+              "none"
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "process_id": "table_insert",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "community",
+        "table": "organisation",
+        "command": {
+          "columns": [
+            "name",
+            "alias",
+            "url",
+            "contact_email",
+            "address1",
+            "postal_address",
+            "postal_zip_code",
+            "territory_id__territory_name"
+          ],
+          "values": [
+            [
+              "Xspectre AB",
+              "xspectre",
+              "https://xspectre.com",
+              "someone@exspectre.com",
+              "Somewhere",
+              "Someplace",
+              "00000",
+              "sweden"
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

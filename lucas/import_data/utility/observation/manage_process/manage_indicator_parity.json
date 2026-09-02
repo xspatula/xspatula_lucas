@@ -1,0 +1,14 @@
+{
+  "process": [
+    {
+      "root_process_id": "import_tabular_data",
+      "process": "manage_indicator_parity",
+      "delete": false,
+      "overwrite": false,
+      "parameters": {
+        "src_indicator_id__src_indicator_name": "salinity",
+        "dst_indicator_id__dst_indicator_name": "salt content"
+      }
+    }
+  ]
+}

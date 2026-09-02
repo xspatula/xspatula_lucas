@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "parameters": {
+        "process": "manage_land_use_order",
+        "tabular_data_path": "import_data/utility/landscape/excel/land_use_order.xlsx",
+        "dst_path": "import_data/utility/landscape/manage_process"
+      }
+    }
+  ]
+}

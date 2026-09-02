@@ -1,0 +1,13 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_landuse_family",
+        "tabular_data_path": "import_data/utility/landscape/excel/land_use_family.xlsx",
+        "dst_path": "import_data/utility/landscape/insert_process/staging"
+      }
+    }
+  ]
+}

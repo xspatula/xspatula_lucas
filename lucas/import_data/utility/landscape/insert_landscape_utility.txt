@@ -1,0 +1,90 @@
+###############################################
+###### translate_landscape_utility.txt ######
+##### translates DATA FROM EXCEL TO JSON ######
+###############################################
+
+##### IMPORT BASIC INDEPENDENT LANDSCAPE UTILITY DATA #####
+##### MUST BE DONE BEFORE THE DEPENDENT DATA WITH FOREIGN KEYS #####
+
+###===========================================###
+### LANDSCAPE UTILITIES ###
+###===========================================###
+#!!!!! landscape utilities contain all catalogues required for adding landscape related data.
+#!!!!! Do not change order of translations as some catalogues have foreign keys for others
+
+#===========================================#
+#==== Landscape utilities without foreign key dependencies (but all are foreign keys for other tables) ====#
+#===========================================#
+
+# Crop growth stage
+### REMOVE TO RUN###crop_growth_stage.json
+
+# Major landform
+### REMOVE TO RUN###major_landform.json
+
+# Slope position
+### REMOVE TO RUN###slope_position.json
+
+# Sky condition
+### REMOVE TO RUN###sky_conditions.json
+
+# Ground condition
+### REMOVE TO RUN###ground_conditions.json
+
+# Soil preparation
+### REMOVE TO RUN###soil_preparation.json
+
+# Reference soil groups contain the FAO defined soil groups.
+# You can edit the soil groups in reference_soil_groups.xlsx and rerun this translation.
+### REMOVE TO RUN###reference_soil_groups.json
+
+# Soil texture classification USDA contain the United States Department of Agriculture soil texture groups.
+# You can edit the USDA soil texture groups in soil_texture_classification_USDA.xlsx and rerun this translation.
+### REMOVE TO RUN###soil_texture_classification_USDA.json
+
+# Soil texture classification ISSS contain the International Society of Soil Science defined soil texture groups.
+# You can edit the ISSS soil texture groups in soil_texture_classification_ISSS.xlsx and rerun this translation.
+### REMOVE TO RUN###soil_texture_classification_ISSS.json
+
+# TG TODO
+# Koeppen Geiger climate zones.
+# You can edit the Koeppen Geiger climate zones in .....xlsx and rerun this translation.
+
+# Land use order is the top level land use classification.
+# You can edit land use order classification in land_user_roder.xlsx and rerun this translation.
+# NOTE that changing the land use order will affect land use family and any edits must be coordinated.
+land_use_order.json
+
+# Land cover order is the top level land cover classification.
+# You can edit land cover order classification in land_cover_roder.xlsx and rerun this translation.
+# NOTE that changing the land cover order will affect land cover family and any edits must be coordinated.
+land_cover_order.json
+
+#===========================================#
+#==== Landscape utilities dependent on foreign keys in other observation utilities ====#
+#===========================================#
+
+# Landuse family is the second level of landuse definition
+# You can add landuse family in land_use_family.xls and rerun this translation.
+land_use_family.json
+
+# Landuse genus is the third level of landuse definition
+# You can add landuse family in land_use_genus.xls and rerun this translation.
+land_use_genus.json
+
+# Landcover family is the second level of landcover definition
+# You can add landcover family in land_cover_family.xls and rerun this translation.
+land_cover_family.json
+
+# Landcover genus is the third level of landcover definition
+# You can add landcover family in land_cover_genus.xls and rerun this translation.
+land_cover_genus.json
+
+
+###===========================================###
+### LANDSCAPE UTILITIES ###
+###===========================================###
+
+# TG TODO
+# cultivation species
+# erosion_conservation_measures

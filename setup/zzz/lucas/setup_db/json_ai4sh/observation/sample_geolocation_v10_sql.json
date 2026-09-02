@@ -1,0 +1,51 @@
+{
+  "process": [
+    {
+      "process_id": "create_table",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "observation",
+        "table": "geolocation",
+        "command": [
+          "id SERIAL",
+          "name TEXT UNIQUE",
+          "x_coordinate DOUBLE PRECISION",
+          "y_coordinate DOUBLE PRECISION",
+          "spatial_reference_id INTEGER REFERENCES observation_utility.spatial_reference (id)",
+          "elevation DOUBLE PRECISION",
+          "elevation_unit INTEGER REFERENCES observation_utility.unit (id)",
+          "latitude DOUBLE PRECISION",
+          "longitude DOUBLE PRECISION",
+          "PRIMARY KEY (id)"
+        ]
+      },
+      "audit": {
+        "INSERT": true,
+        "UPDATE": true,
+        "DELETE": true
+      }
+    },
+    {
+      "process_id": "table_insert",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "observation",
+        "table": "geolocation",
+        "command": {
+          "columns": [
+            "id",
+            "name"
+          ],
+          "values": [
+            [
+              "0",
+              "None"
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_major_landform",
+        "tabular_data_path": "import_data/utility/landscape/excel/major_landform.xlsx",
+        "dst_path": "import_data/utility/landscape/insert_process/staging"
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "parameters": {
+        "process": "manage_soil_texture_classification_ISSS",
+        "tabular_data_path": "import_data/utility/landscape/excel/soil_texture_classification_ISSS.xlsx",
+        "dst_path": "import_data/utility/landscape/manage_process"
+      }
+    }
+  ]
+}

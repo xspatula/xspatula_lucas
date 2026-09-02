@@ -1,0 +1,39 @@
+{
+  "process": [
+    {
+      "process_id": "table_insert",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "community",
+        "table": "user",
+        "command": {
+          "columns": [
+            "organisation_id__organisation_name",
+            "email",
+            "email_alt",
+            "password",
+            "first_name",
+            "last_name",
+            "user_name",
+            "territory_id__territory_name",
+            "stratum_code"
+          ],
+          "values": [
+            [
+              "xspectre",
+              "someone@exspectre.com",
+              "someone_else@xspectre.com",
+              "$2b$12$uEjeLn5gl9s7F8kVPF8MQ.cUSe.A7YKYPYeciceKh7mkN8ncv372C",
+              "Some",
+              "One",
+              "someone",
+              "sweden",
+              "5"
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}
