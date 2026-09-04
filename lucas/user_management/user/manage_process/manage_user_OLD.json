@@ -1,0 +1,23 @@
+{
+  "process": [
+    {
+      "root_process_id": "import_tabular_data",
+      "process": "manage_user",
+      "delete": false,
+      "overwrite": false,
+      "parameters": {
+        "organisation_id__organisation_name": "xspectre ab",
+        "user_name": "thomas.xspectre",
+        "first_name": "thomas",
+        "middle_name": "robert",
+        "last_name": "gumbricht",
+        "email": "thomas@xspectre.com",
+        "address1": "klockarev\u00e4gen 3",
+        "postal_address": "f\u00e4rjestaden",
+        "postal_zip_code": 38631,
+        "territory_id__territory_name": 0,
+        "password": "$2b$12$PeMak5zJ3UdT0AqjJ8.GiOzW9gQR5/sHGvPrv55yronP3wQK/Oo3i"
+      }
+    }
+  ]
+}
