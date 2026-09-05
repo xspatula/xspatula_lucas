@@ -1,0 +1,62 @@
+{
+  "dataset_name": "lucas",
+  "campaign_name": "",
+  "provision_name": "foss xds rapid content analyzer",
+  "preparation_name": "ds2",
+  "begin_wavelength": 400,
+  "end_wavelength": 2500,
+  "output_bandwidth": 10,
+  "min_profile": 0,
+  "max_profile": 20,
+  "indicator_array": [
+    "cec",
+    "clay",
+    "silt",
+    "sand",
+    "c-org",
+    "n-tot",
+    "ph-water"
+  ],
+  "as_absorbance": true,
+  "preprocessing_chain": [
+    {
+      "id": "mc",
+      "step": 1,
+      "process": "spectra_scaling",
+      "parameters": {
+        "method": "meancentring"
+      }
+    },
+    {
+      "id": "d1",
+      "step": 2,
+      "process": "spectra_derivative",
+      "parameters": {
+        "derivative": 1,
+        "append": false
+      }
+    },
+    {
+      "id": "pca5",
+      "step": 3,
+      "process": "spectra_decomposition",
+      "parameters": {
+        "method": "pca",
+        "n_components": 5
+      }
+    }
+  ],
+  "data_range": {},
+  "n_samples": 25,
+  "output_data": {
+    "data_type": "pca",
+    "column_format": "pc{n} \u2014 n is component number starting at 1",
+    "spectral_array": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  }
+}

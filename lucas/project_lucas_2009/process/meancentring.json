@@ -1,0 +1,20 @@
+{
+  "process": [
+    {
+      "process": "spectra_scaling",
+      "parameters": {
+        "project_root_fp": "./project_lucas_2009/data/lucas_400-2500_10"
+      }
+    },
+    {
+      "process": "spectra_scatter_correction",
+      "parameters": {
+        "project_root_fp": "./project_lucas_2009/data/lucas_400-2500_10",
+        "dataframe": "previous",
+        "scaler": [
+          "snv"
+        ]
+      }
+    }
+  ]
+}

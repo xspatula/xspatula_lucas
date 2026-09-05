@@ -1,0 +1,16 @@
+{
+  "process": [
+    {
+      "process": "detect_outliers",
+      "parameters": {
+        "project_root_fp": "./project_lucas_2009/data/lucas_400-2500_10",
+        "indicator_array": [
+          "sand",
+          "c-org"
+        ],
+        "detector": "iforest",
+        "threshold": 0.1
+      }
+    }
+  ]
+}

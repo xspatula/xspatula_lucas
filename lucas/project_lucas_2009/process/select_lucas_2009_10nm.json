@@ -1,0 +1,24 @@
+{
+  "process": [
+    {
+      "process": "select_spectra",
+      "overwrite": false,
+      "parameters": {
+        "dataset_name": "lucas",
+        "campaign_name": "",
+        "provision_name": "foss xds rapid content analyzer",
+        "preparation_name": "ds2",
+        "begin_wavelength": 400,
+        "end_wavelength": 2500,
+        "output_bandwidth": 10,
+        "min_profile": 0,
+        "max_profile": 20,
+        "indicator_array": ["cec", "clay", "silt", "sand", "c-org","n-tot","ph-water"],
+        "data_range": "",
+        "as_absorbance": true,
+        "output_root_fp": "./data"
+      }
+    }
+  ]
+}
+
