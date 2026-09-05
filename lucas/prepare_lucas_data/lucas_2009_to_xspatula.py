@@ -15,6 +15,7 @@ To directly put the output data in the prepared structure, set the `OUTPUT_ROOT`
 `../LUCAS_2009`.
 """
 
+import sys
 import csv
 import json
 import os
@@ -28,6 +29,8 @@ CSV_PATH = "/Users/thomasgumbricht/GitHub_xspatula/LUCAS_TO_JSON/2009/LUCAS.SOIL
 OUTPUT_ROOT = "../import_data/LUCAS_2009"
 RECORDS = 25  # number of CSV rows to process in steps 4-7; 0 = all rows
 
+CONTACT_NAME = "inherit"
+CONTACT_EMAIL = "inherit"
 CAMPAIGN_NAME = "lucas_eu_2009"
 LAB_PROVISION = "lucas-wetlab-2009"
 SPECTRA_PROVISION = "foss xds rca"
@@ -98,83 +101,28 @@ def date_to_yyyymmdd(value):
 
 
 # ---------------------------------------------------------------------------
-# step 1 - static campaign (+ sampling_log, which is equally static)
+# step 1 - static sampling_log
 # ---------------------------------------------------------------------------
 
-def step1_campaign_and_sampling_log():
+def step1_sampling_log():
     lab_dir = os.path.join(OUTPUT_ROOT, "process_lab")
-    spectra_dir = os.path.join(OUTPUT_ROOT, "process_spectra")
-
-    campaign_common = {
-        "dataset_id__dataset_name": "lucas",
-        "name": CAMPAIGN_NAME,
-        "display_name": "LUCAS EU 2009",
-        "contact_name": "thomas gumbricht",
-        "contact_email": "thomas.gumbricht@gmail.com",
-        "species_id__species_name": "soil",
-        "profiling_id__profiling_name": "depth_cm",
-        "substance_array": "soil",
-        "keyword_array": "soil spectroscopy, soil health, lucas",
-        "url": "https://esdac.jrc.ec.europa.eu/projects/lucas",
-        "territory_id__territory_name": "eu",
-        "site": "europe",
-        "spatial_reference_id__spatial_reference_name": "geographic",
-        "location_method_id__location_method_name": "gps",
-        "location_error": 1000,
-        "laboratory": 1,
-    }
-
-    campaign_filename = f"{CAMPAIGN_NAME}_campaign.json"
-
-    for process_dir, provision in ((lab_dir, LAB_PROVISION), (spectra_dir, SPECTRA_PROVISION)):
-        params = dict(campaign_common)
-        params["provision_id__provision_name_array"] = provision
-        # match example key ordering: provision array right after name
-        ordered = {
-            "dataset_id__dataset_name": params["dataset_id__dataset_name"],
-            "name": params["name"],
-            "provision_id__provision_name_array": params["provision_id__provision_name_array"],
-            "display_name": params["display_name"],
-            "contact_name": params["contact_name"],
-            "contact_email": params["contact_email"],
-            "species_id__species_name": params["species_id__species_name"],
-            "profiling_id__profiling_name": params["profiling_id__profiling_name"],
-            "substance_array": params["substance_array"],
-            "keyword_array": params["keyword_array"],
-            "url": params["url"],
-            "territory_id__territory_name": params["territory_id__territory_name"],
-            "site": params["site"],
-            "spatial_reference_id__spatial_reference_name": params["spatial_reference_id__spatial_reference_name"],
-            "location_method_id__location_method_name": params["location_method_id__location_method_name"],
-            "location_error": params["location_error"],
-            "laboratory": params["laboratory"],
-        }
-        campaign_dir = os.path.join(process_dir, "campaign")
-        write_process_json(
-            os.path.join(campaign_dir, "manage_process", campaign_filename),
-            "manage_campaign",
-            ordered,
-        )
-        write_pilot_txt(campaign_dir, "CAMPAIGN", [campaign_filename])
 
     sampling_log_params = {
         "campaign_id__campaign_name": CAMPAIGN_NAME,
         "name": CAMPAIGN_NAME,
-        "contact_name": "thomas gumbricht",
-        "contact_email": "thomas.gumbricht@gmail.com",
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
         "abstract": "Sampling log for lucas eu 2009",
     }
     sampling_log_filename = f"{CAMPAIGN_NAME}_sampling_log.json"
 
-    for process_dir in (lab_dir, spectra_dir):
-        sampling_log_dir = os.path.join(process_dir, "sampling_log")
-        write_process_json(
-            os.path.join(sampling_log_dir, "manage_process", sampling_log_filename),
-            "manage_sampling_log",
-            sampling_log_params,
-        )
-        write_pilot_txt(sampling_log_dir, "SAMPLING_LOG", [sampling_log_filename])
-
+    sampling_log_dir = os.path.join(lab_dir, "sampling_log")
+    write_process_json(
+        os.path.join(sampling_log_dir, "manage_process", sampling_log_filename),
+        "manage_sampling_log",
+        sampling_log_params,
+    )
+    write_pilot_txt(sampling_log_dir, "SAMPLING_LOG", [sampling_log_filename])
 
 # ---------------------------------------------------------------------------
 # step 2 - static observation log
@@ -188,8 +136,8 @@ def step2_observation_log():
         "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
         "provision_id__provision_name": LAB_PROVISION,
         "name": LAB_OBSERVATION_LOG_NAME,
-        "contact_name": "thomas gumbricht",
-        "contact_email": "thomas.gumbricht@gmail.com",
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
         "preparation_id__preparation_name": "ds2",
         "preservation_id__preservation_name": "ds2",
         "storage_id__storage_name": "amb",
@@ -207,8 +155,8 @@ def step2_observation_log():
         "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
         "provision_id__provision_name": SPECTRA_PROVISION,
         "name": SPECTRA_OBSERVATION_LOG_NAME,
-        "contact_name": "thomas gumbricht",
-        "contact_email": "thomas.gumbricht@gmail.com",
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
         "preparation_id__preparation_name": "ds2",
         "preservation_id__preservation_name": "ds2",
         "storage_id__storage_name": "amb",
@@ -449,7 +397,7 @@ def main():
     record_rows = rows if RECORDS == 0 else rows[:RECORDS]
 
     steps = [
-        ("step1 - campaign & sampling_log", step1_campaign_and_sampling_log, ()),
+        ("step1 - campaign & sampling_log", step1_sampling_log, ()),
         ("step2 - observation_log", step2_observation_log, ()),
         ("step3 - spectrometer", step3_spectrometer, (spc_columns,)),
         ("step4 - geolocation", step4_geolocation, (record_rows, idx)),
