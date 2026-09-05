@@ -2,7 +2,7 @@
   "process": [
     {
       "process": "add_process",
-      "overwrite": false,
+      "overwrite": true,
       "parameters": {
         "root_process": "manage_table_data",
         "process": "manage_sampling_log",
@@ -35,7 +35,7 @@
               "parameter": "contact_name",
               "parameter_type": "text",
               "required": false,
-              "default_value": "",
+              "default_value": "inherit",
               "hint": "Contact name for the sampling log",
               "schema_table": {
                 "schema": "observation",
@@ -45,13 +45,21 @@
               "permission": {
                 "update": true,
                 "delete": false
+              },
+              "inherit": {
+                "process_parameter": "contact_name",
+                "src_schema": "observation",
+                "src_table": "campaign",
+                "src_column": "contact_name",
+                "search_column": "id",
+                "search_object": "campaign_id__campaign_name"
               }
             },
             {
               "parameter": "contact_email",
               "parameter_type": "text",
               "required": false,
-              "default_value": "",
+              "default_value": "inherit",
               "hint": "The email contact address for the campaign",
               "schema_table": {
                 "schema": "observation",
@@ -61,6 +69,14 @@
               "permission": {
                 "update": true,
                 "delete": false
+              },
+              "inherit": {
+                "process_parameter": "contact_email",
+                "src_schema": "observation",
+                "src_table": "campaign",
+                "src_column": "contact_email",
+                "search_column": "id",
+                "search_object": "campaign_id__campaign_name"
               }
             },
             {

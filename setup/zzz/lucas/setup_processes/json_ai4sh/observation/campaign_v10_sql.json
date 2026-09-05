@@ -73,7 +73,7 @@
               "parameter": "contact_name",
               "parameter_type": "text",
               "required": false,
-              "default_value": "",
+              "default_value": "inherit",
               "hint": "Contact name for the campaign",
               "schema_table": {
                 "schema": "observation",
@@ -83,6 +83,14 @@
               "permission": {
                 "update": true,
                 "delete": false
+              },
+              "inherit": {
+                "process_parameter": "contact_name",
+                "src_schema": "observation",
+                "src_table": "dataset",
+                "src_column": "contact_name",
+                "search_column": "id",
+                "search_object": "dataset_id__dataset_name"
               }
             },
             {
@@ -99,6 +107,14 @@
               "permission": {
                 "update": true,
                 "delete": false
+              },
+              "inherit": {
+                "process_parameter": "contact_email",
+                "src_schema": "observation",
+                "src_table": "dataset",
+                "src_column": "contact_email",
+                "search_column": "id",
+                "search_object": "dataset_id__dataset_name"
               }
             },
             {
