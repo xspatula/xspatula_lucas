@@ -25,7 +25,7 @@ example of loading a real soil dataset with the Xspatula framework.
 ### 1. Create the Anaconda environment
 
 ```bash
-conda env create --file anaconda/xspatula_ai4sh_py_3.12.yml
+conda env create --file setup/anaconda/xspatula_ai4sh_py_3.12.yml
 ```
 
 > The environment and kernel are still named `xspatula_ai4sh_py_3.12` — inherited from the parent
@@ -38,9 +38,9 @@ Copy and edit one of the example scheme files in `setup/zzz/`:
 
 | File | Purpose |
 |---|---|
-| `scheme_ai4sh_local_setup.json` | Create a new database |
-| `scheme_ai4sh_local_delete.json` | Delete a database |
-| `scheme_ai4sh_local_use.json` | Use an existing database |
+| `scheme_lucas_local_setup.json` | Create a new database |
+| `scheme_lucas_local_delete.json` | Delete a database |
+| `scheme_lucas_local_use.json` | Use an existing database |
 
 Set the host, port, database name, and superuser credentials (or point to a `.netrc` entry).
 
@@ -61,6 +61,14 @@ To delete the database, use `setup/delete_db.ipynb` instead.
    against the generated job files to insert the campaign into the database. See
    [xspatula_lucas_docs](https://xspatula.github.io/xspatula_lucas_docs/lucas_2009/) for the full
    walkthrough, including one notebook cell to skip.
+
+### 5. Explore, preprocess, and model
+
+Once the campaign is loaded, `lucas/project_lucas_2009/` has three notebooks — `explore_select_data.ipynb`,
+`ml_preprocess.ipynb`, `ml_model.ipynb` — for pulling a working subset out of the database and
+running it through preprocessing and regression. See
+[xspatula_lucas_docs](https://xspatula.github.io/xspatula_lucas_docs/lucas_2009/machine_learning/explore_select_data/)
+for the full walkthrough, including a few notebook cell fixes still pending in `ml_preprocess.ipynb`.
 
 ---
 
@@ -94,25 +102,26 @@ xspatula_lucas/
 │   ├── setup_processes.ipynb   # Notebook: register processes
 │   ├── src_setup/               # Setup-specific Python source
 │   │   └── lib_setup/           # DB setup, process management, privilege control
+│   ├── anaconda/
+│   │   └── xspatula_ai4sh_py_3.12.yml  # Conda environment definition
 │   └── zzz/                     # Example scheme, job, pilot and process files
-│       ├── scheme_ai4sh_local_setup.json
-│       ├── scheme_ai4sh_local_delete.json
-│       ├── scheme_ai4sh_local_use.json
+│       ├── scheme_lucas_local_setup.json
+│       ├── scheme_lucas_local_delete.json
+│       ├── scheme_lucas_local_use.json
 │       └── lucas/                # Job, pilot and process files for DB setup
-├── lucas/
-│   ├── scheme_lucas.json         # Scheme file for the LUCAS campaign import
-│   ├── prepare_lucas_data/
-│   │   └── lucas_2009_to_xspatula.py  # CSV → xspatula JSON/pilot files
-│   ├── import_data/
-│   │   ├── LUCAS_2009/            # Generated job/pilot files for the 2009 campaign
-│   │   ├── dataset_meta/          # Campaign/dataset metadata job files
-│   │   ├── utility/                # Utility-schema job files
-│   │   ├── load_LUCAS_2009.ipynb             # Notebook: insert the 2009 campaign
-│   │   ├── insert_lucas_dataset_meta.ipynb  # Notebook: insert dataset metadata
-│   │   └── insert_utility.ipynb             # Notebook: insert utility records
-│   └── user_management/           # Organisation/user setup for this project
-└── anaconda/
-    └── xspatula_ai4sh_py_3.12.yml  # Conda environment definition
+└── lucas/
+    ├── scheme_lucas.json         # Scheme file for the LUCAS campaign import
+    ├── prepare_lucas_data/
+    │   └── lucas_2009_to_xspatula.py  # CSV → xspatula JSON/pilot files
+    ├── import_data/
+    │   ├── LUCAS_2009/            # Generated job/pilot files for the 2009 campaign
+    │   ├── dataset_meta/          # Campaign/dataset metadata job files
+    │   ├── utility/                # Utility-schema job files
+    │   ├── load_LUCAS_2009.ipynb             # Notebook: insert the 2009 campaign
+    │   ├── insert_lucas_dataset_meta.ipynb  # Notebook: insert dataset metadata
+    │   └── insert_utility.ipynb             # Notebook: insert utility records
+    ├── project_lucas_2009/        # Machine learning: explore/select, preprocess, model
+    └── user_management/           # Organisation/user setup for this project
 ```
 
 ---
@@ -184,8 +193,9 @@ Full documentation at **[xspatula.github.io/xspatula_lucas_docs](https://xspatul
 
 - Framework architecture, database setup, and process setup — shared with the rest of the
   Xspatula family, documented at [xspatula.github.io/xspatula_core_docs](https://xspatula.github.io/xspatula_core_docs/)
-- LUCAS-specific dataset metadata, sample, and spectra handling, plus the full LUCAS 2009
-  download → prepare → insert walkthrough — documented in this repo's own manual
+- LUCAS-specific dataset metadata, sample, and observation handling, the full LUCAS 2009
+  download → prepare → insert walkthrough, and the explore/preprocess/model machine learning
+  pipeline — documented in this repo's own manual
 
 ---
 
