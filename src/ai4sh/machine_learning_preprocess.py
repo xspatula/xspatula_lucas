@@ -1702,7 +1702,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         # Selector defaults
         sel_defaults_fp = os.path.join(
-            _REPO_ROOT, 'ai4sh', 'default', 'selector', 'selector_default_settings.json')
+            _REPO_ROOT, 'lucas', 'default', 'selector', 'selector_default_settings.json')
         sel_defaults = {}
         if os.path.exists(sel_defaults_fp):
             with open(sel_defaults_fp) as fh:

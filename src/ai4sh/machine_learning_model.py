@@ -55,11 +55,11 @@ from src.ai4sh.machine_learning_preprocess import (
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 _DEFAULT_MODEL_PARAMS_FP = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'regressors', 'regression_model_parameters.json')
+    _REPO_ROOT, 'lucas', 'default', 'regressors', 'regression_model_parameters.json')
 _DEFAULT_REGR_SYMBOLS_FP = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'plot', 'regressionmodelsymbols.json')
+    _REPO_ROOT, 'lucas', 'default', 'plot', 'regressionmodelsymbols.json')
 _DEFAULT_TARGET_SYMBOLS_FP = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'plot', 'targetfeaturesymbols.json')
+    _REPO_ROOT, 'lucas', 'default', 'plot', 'targetfeaturesymbols.json')
 
 
 # ------------------------------------------------------------------ model registry

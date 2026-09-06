@@ -31,7 +31,7 @@ from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_conf
 # Repo root: src/ai4sh/plot.py → up 2 levels
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
-_DEFAULT_SYMBOLS_FPN = os.path.join(_REPO_ROOT, 'ai4sh', 'default', 'plot', 'targetfeaturesymbols.json')
+_DEFAULT_SYMBOLS_FPN = os.path.join(_REPO_ROOT, 'lucas', 'default', 'plot', 'targetfeaturesymbols.json')
 
 
 def _spectra_x_axis(columns):

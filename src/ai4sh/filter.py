@@ -11,7 +11,7 @@ from pathlib import Path
 from scipy.ndimage import convolve1d, gaussian_filter1d
 from scipy.signal import savgol_filter
 
-_DEFAULT_FILTER_DIR = Path(__file__).resolve().parents[2] / 'ai4sh' / 'default' / 'filter'
+_DEFAULT_FILTER_DIR = Path(__file__).resolve().parents[2] / 'lucas' / 'default' / 'filter'
 
 _FILTER_DEFAULT_FILES = {
     'moving-average': 'moving-average_default.json',

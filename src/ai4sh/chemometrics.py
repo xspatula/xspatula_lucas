@@ -16,13 +16,13 @@ from sklearn.decomposition import PCA
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 _DEFAULT_STANDARDISE_FPN = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'transform', 'indicator_standardise_default.json')
+    _REPO_ROOT, 'lucas', 'default', 'transform', 'indicator_standardise_default.json')
 
 _DEFAULT_TRANSFORMATION_FPN = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'transform', 'indicator_transformation_default.json')
+    _REPO_ROOT, 'lucas', 'default', 'transform', 'indicator_transformation_default.json')
 
 _DEFAULT_CHEMOMETRIC_FPN = os.path.join(
-    _REPO_ROOT, 'ai4sh', 'default', 'chemometric', 'chemometric_default.json')
+    _REPO_ROOT, 'lucas', 'default', 'chemometric', 'chemometric_default.json')
 
 
 def _load_transform_config(param, default_fpn, verbose):
