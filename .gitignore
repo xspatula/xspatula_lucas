@@ -80,3 +80,7 @@ lucas/import_data/utility/observation/insert_process/staging
 lucas/import_data/LUCAS_2009/process_lab/
 lucas/import_data/LUCAS_2009/process_spectra
 
+# =============================================================
+# LUCAS separate projects data
+# =============================================================
+lucas/project_lucas_2009/data/
