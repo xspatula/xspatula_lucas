@@ -175,14 +175,21 @@ class Process_plot(Get_schema_table):
 
         return plot_dir
 
-    def _Get_symbol(self, symbols, indicator):
-        '''Return (color, label, unit) for an indicator, with fallback to indicator name.'''
+    def _Get_symbol(self, symbols, indicator, applied_units_D=None):
+        '''Return (color, label, unit) for an indicator, with fallback to indicator name.
+
+        If the symbol's unit is "native", resolve to the actual DB-recorded unit saved in
+        applied_units_D (params_D['indicator_units']) instead of the literal "native".
+        '''
 
         sym = symbols.get(indicator, {})
 
         color = sym.get('color', 'steelblue')
         label = sym.get('label', indicator)
         unit = sym.get('unit', '')
+
+        if unit == 'native' and applied_units_D:
+            unit = applied_units_D.get(indicator, unit)
 
         return color, label, unit
 
@@ -266,7 +273,7 @@ class Process_plot(Get_schema_table):
 
     def _Histogram_plot(self, df, indicators, symbols, bins, show, save, plot_dir,
                         transform_dict=None, standard_dict=None,
-                        individual_canvas_plot=True, single_canvas_plot=False):
+                        individual_canvas_plot=True, single_canvas_plot=False, applied_units_D=None):
         '''Plot histograms for each indicator — individual canvases then multi-column grid canvas.'''
 
         n_cols = 3
@@ -284,7 +291,7 @@ class Process_plot(Get_schema_table):
                     continue
 
                 series = df[indicator].dropna()
-                color, label, unit = self._Get_symbol(symbols, indicator)
+                color, label, unit = self._Get_symbol(symbols, indicator, applied_units_D)
                 ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
 
                 fig, ax = plt.subplots(figsize=(6, 4))
@@ -322,7 +329,7 @@ class Process_plot(Get_schema_table):
                     continue
 
                 series = df[indicator].dropna()
-                color, label, unit = self._Get_symbol(symbols, indicator)
+                color, label, unit = self._Get_symbol(symbols, indicator, applied_units_D)
                 ann, _ = self._build_transform_info(indicator, transform_dict, standard_dict)
                 ax = axs_flat[f]
                 series.plot.hist(bins=bins, color=color, ax=ax)
@@ -353,7 +360,7 @@ class Process_plot(Get_schema_table):
 
     def _Boxplot_plot(self, df, indicators, symbols, show, save, plot_dir,
                       transform_dict=None, standard_dict=None,
-                      individual_canvas_plot=True, single_canvas_plot=False):
+                      individual_canvas_plot=True, single_canvas_plot=False, applied_units_D=None):
         '''Plot boxplots for each indicator — individual canvases then multi-column grid canvas.'''
 
         n_cols = 3
@@ -369,7 +376,7 @@ class Process_plot(Get_schema_table):
                         print('    Warning: indicator "%s" not in DataFrame — skipping.' % indicator)
                     continue
 
-                color, label, unit = self._Get_symbol(symbols, indicator)
+                color, label, unit = self._Get_symbol(symbols, indicator, applied_units_D)
                 ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
 
                 fig, ax = plt.subplots(figsize=(4, 5))
@@ -411,7 +418,7 @@ class Process_plot(Get_schema_table):
                 if indicator not in df.columns:
                     continue
 
-                color, label, unit = self._Get_symbol(symbols, indicator)
+                color, label, unit = self._Get_symbol(symbols, indicator, applied_units_D)
                 ann, _ = self._build_transform_info(indicator, transform_dict, standard_dict)
                 ax = axs_flat[f]
                 df.boxplot(
@@ -528,15 +535,17 @@ class Process_plot(Get_schema_table):
 
         plot_dir = self._Build_plot_output_path(project_root_fp) if save else None
 
+        applied_units_D = params_D.get('indicator_units', {}) if params_D else {}
+
         if do_histogram:
             self._Histogram_plot(df, indicators, symbols, bins, show, save, plot_dir,
                                  transform_dict, standard_dict,
-                                 individual_canvas_plot, single_canvas_plot)
+                                 individual_canvas_plot, single_canvas_plot, applied_units_D)
 
         if do_boxplot:
             self._Boxplot_plot(df, indicators, symbols, show, save, plot_dir,
                                transform_dict, standard_dict,
-                               individual_canvas_plot, single_canvas_plot)
+                               individual_canvas_plot, single_canvas_plot, applied_units_D)
 
     def _Plot_spectra(self):
         '''Plot spectra through each chemometric step from a saved Parquet dataset.'''

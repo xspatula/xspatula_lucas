@@ -349,9 +349,12 @@ class Process_select(Get_schema_table):
             # Translate recorded units to the target unit from targetfeaturesymbols.json, so
             # indicator values are always saved in one consistent unit per indicator — required
             # for merging Parquet subsets from different provisions/datasets later on.
-            target_units_D = Load_target_units('default', self.verbose)
+            target_units_D = Load_target_units(getattr(p, 'targetfeaturesymbols', 'default'), self.verbose)
 
             unit_skip_indicators = []
+
+            # Indicators whose target unit is 'native' keep whatever unit the DB recorded
+            native_units_D = {}
 
             for indicator_name in list(lab_df['indicator_name'].unique()):
 
@@ -361,6 +364,20 @@ class Process_select(Get_schema_table):
                     continue
 
                 ind_mask = lab_df['indicator_name'] == indicator_name
+
+                if dst_unit == 'native':
+
+                    src_units = [u for u in lab_df.loc[ind_mask, 'unit_name'].unique() if u]
+
+                    if len(src_units) > 1:
+                        print('    ⚠️  Indicator %s has mixed native units in the DB: %s — '
+                              'using "%s" for the saved unit label' % (
+                                  indicator_name, src_units, src_units[0]))
+
+                    if src_units:
+                        native_units_D[indicator_name] = src_units[0]
+
+                    continue
 
                 for src_unit in lab_df.loc[ind_mask, 'unit_name'].unique():
 
@@ -405,7 +422,10 @@ class Process_select(Get_schema_table):
 
             lab_pivot.columns.name = None
 
-            applied_units_D = {ind: target_units_D[ind] for ind in lab_pivot.columns if ind in target_units_D}
+            applied_units_D = {
+                ind: native_units_D.get(ind, target_units_D[ind])
+                for ind in lab_pivot.columns if ind in target_units_D
+            }
 
             missing_indicators = [ind for ind in indicators if ind not in lab_pivot.columns]
 
