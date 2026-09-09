@@ -4,7 +4,7 @@
       "color": "whitesmoke",
       "alpha": 0.2,
       "label": "CaCo3",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "ca2+": {
       "color": "moccasin",
@@ -16,19 +16,19 @@
       "color": "seagreen",
       "alpha": 0.2,
       "label": "Cation Exc. Cap.",
-      "unit": "mol*kg-1"
+      "unit": "cmolc*kg^-1"
     },
     "cf": {
       "color": "sienna",
       "alpha": 0.2,
       "label": "Coarse fraction",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "clay": {
       "color": "tan",
       "alpha": 0.2,
       "label": "Clay cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "ec": {
       "color": "dodgerblue",
@@ -39,26 +39,26 @@
     "k-ext": {
       "color": "lightcyan",
       "alpha": 0.2,
-      "label": "Potassion (K)",
-      "unit": "mol*kg-1"
+      "label": "Extractable potassion (K)",
+      "unit": "cmolc*kg^-1"
     },
     "n-tot": {
       "color": "darkcyan",
       "alpha": 0.2,
       "label": "Nitrogen (N) [tot]",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "c-org": {
       "color": "dimgray",
       "alpha": 0.2,
       "label": "Organic carbon (C)",
-      "unit": "percent"
+      "unit": "g*kg^-1"
     },
     "p-ext": {
       "color": "firebrick",
       "alpha": 0.2,
       "label": "Phosphorus (P)",
-      "unit": "mg*kg-1"
+      "unit": "mg*kg^-1"
     },
     "ph-cacl2": {
       "color": "lemonchiffon",
@@ -76,37 +76,37 @@
       "color": "orange",
       "alpha": 0.2,
       "label": "Sand cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "fine sand": {
       "color": "orange",
       "alpha": 0.2,
       "label": "Sand cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "coarse sand": {
       "color": "orange",
       "alpha": 0.2,
       "label": "Sand cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "silt": {
       "color": "khaki",
       "alpha": 0.2,
       "label": "Silt cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "fine silt": {
       "color": "khaki",
       "alpha": 0.2,
       "label": "Silt cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     },
     "coarse silt": {
       "color": "khaki",
       "alpha": 0.2,
       "label": "Silt cont.",
-      "unit": "percent"
+      "unit": "weight percent"
     }
   },
   "featureImportancePlot": {

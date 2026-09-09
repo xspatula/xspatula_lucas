@@ -63,11 +63,12 @@ class Process_select(Get_schema_table):
 
         if available:
             print('    Available indicators for %s:' % scope)
-            for name, alias in available:
+            for name, alias, unit in available:
+                unit_str = ' [%s]' % unit if unit else ''
                 if alias:
-                    print('        - %s (%s)' % (name, alias))
+                    print('        - %s (%s)%s' % (name, alias, unit_str))
                 else:
-                    print('        - %s' % name)
+                    print('        - %s%s' % (name, unit_str))
         else:
             print('    No indicators found in the DB for %s.' % scope)
 

@@ -544,6 +544,11 @@ class PG_manage_AI4SH:
         query_D must contain:
           dataset_name  - dataset name or alias
           campaign_name - optional; pass empty string to skip filter
+
+        Returns list of tuples: (name, alias, unit_name). unit_name is the unit the
+        provision behind the measurement records that indicator in
+        (observation_utility.provision_indicator.unit_id), or None if no
+        provision/unit link exists for that observation_log/indicator.
         '''
         if 'dataset_name' in query_D:
             resolved = self._Retrieve_name_from_name_alias(
@@ -562,7 +567,7 @@ class PG_manage_AI4SH:
             campaign_filter = " AND OC.name = '%s'" % query_D['campaign_name']
 
         sql = (
-            "SELECT DISTINCT OUI.name, OUI.alias "
+            "SELECT DISTINCT OUI.name, OUI.alias, OUU.name "
             "FROM observation.observation_measurement AS OOM "
             "INNER JOIN observation.observation AS OO ON OOM.observation_id = OO.id "
             "INNER JOIN observation.observation_log AS OOL ON OO.observation_log_id = OOL.id "
@@ -570,13 +575,16 @@ class PG_manage_AI4SH:
             "INNER JOIN observation.campaign AS OC ON OSL.campaign_id = OC.id "
             "INNER JOIN observation.dataset AS OD ON OC.dataset_id = OD.id "
             "INNER JOIN observation_utility.indicator AS OUI ON OOM.indicator_id = OUI.id "
+            "LEFT JOIN observation_utility.provision_indicator AS OUPI "
+            "ON OUPI.provision_id = OOL.provision_id AND OUPI.indicator_id = OOM.indicator_id "
+            "LEFT JOIN observation_utility.unit AS OUU ON OUU.id = OUPI.unit_id "
             "WHERE OD.name = '%s'%s ORDER BY OUI.name;" % (
                 query_D['dataset_name'], campaign_filter)
         )
 
         recs = pg_session_C._Execute_search_all_sql(sql)
 
-        return [(r[0], r[1]) for r in recs] if recs else []
+        return [(r[0], r[1], r[2]) for r in recs] if recs else []
 
     def _Retrieve_lab_measurements_for_dataset(self, query_D, pg_session_C):
         '''Return lab measurements for a dataset and list of indicator names.
