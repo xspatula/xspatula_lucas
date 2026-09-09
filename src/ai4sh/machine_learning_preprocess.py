@@ -27,6 +27,7 @@ from src.ai4sh.chemometrics import (apply_derivative, apply_scatter_correction,
                                      apply_scaling, apply_decomposition,
                                      apply_chemometrics, _load_chemometric_config)
 from src.ai4sh.filter import apply_filter, apply_multi_filter
+from src.ai4sh.parquet_units import Read_parquet_with_units, Save_parquet_with_units
 
 from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
@@ -464,7 +465,7 @@ class Process_ml_preprocess(Get_schema_table):
         if not parquet_matches:
             raise FileNotFoundError('No data-*.parquet file found in: %s' % project_root_fp)
 
-        df = pd.read_parquet(parquet_matches[0])
+        df, _units_D = Read_parquet_with_units(parquet_matches[0])
 
         params_D = {}
         if params_matches:
@@ -562,7 +563,7 @@ class Process_ml_preprocess(Get_schema_table):
             except FileNotFoundError as e:
                 print('    ERROR: %s' % e)
                 return
-        df = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
 
@@ -693,7 +694,7 @@ class Process_ml_preprocess(Get_schema_table):
         for col in approved:
             df_out.loc[masks[col], col] = np.nan
 
-        df_out.to_parquet(ol_del_fp, index=False)
+        Save_parquet_with_units(df_out, ol_del_fp, units_D)
         _write_previous_df(project_root_fp, 'detect_outliers', [
             {'dataframe': os.path.basename(ol_del_fp),
              'indicator': None, 'regressor': None, 'selector': None}
@@ -817,7 +818,7 @@ class Process_ml_preprocess(Get_schema_table):
             except FileNotFoundError as e:
                 print('    ERROR: %s' % e)
                 return
-        df = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
 
@@ -887,7 +888,7 @@ class Process_ml_preprocess(Get_schema_table):
         non_spectral = [c for c in df.columns if not _is_spectral_col(c)]
         df_out = df[non_spectral + retain_cols].copy()
 
-        df_out.to_parquet(vt_fp, index=False)
+        Save_parquet_with_units(df_out, vt_fp, units_D)
         _write_previous_df(project_root_fp, 'select_variance_threshold', [
             {'dataframe': os.path.basename(vt_fp),
              'indicator': None, 'regressor': None, 'selector': None}
@@ -935,7 +936,7 @@ class Process_ml_preprocess(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return None
 
-        df = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
 
@@ -955,7 +956,7 @@ class Process_ml_preprocess(Get_schema_table):
             'df': df, 'spec_df': spec_df, 'spectral_cols': spectral_cols,
             'wavelengths': wavelengths, 'max_spectra': max_spectra,
             'colormap': colormap, 'ann': 'n=%d' % len(df), 'stem': stem,
-            'project_root_fp': project_root_fp,
+            'project_root_fp': project_root_fp, 'units_D': units_D,
             'show': show, 'save': save, 'overwrite': overwrite, 'plot_dir': plot_dir,
         }
 
@@ -1035,7 +1036,7 @@ class Process_ml_preprocess(Get_schema_table):
             plt.close(fig)
 
     def _Accept_and_save(self, df_orig, spec_out_full, out_cols, abbrev,
-                          stem, project_root_fp, overwrite, step_info):
+                          stem, project_root_fp, overwrite, step_info, units_D=None):
         '''Prompt y/n, save parquet + companion JSON. Returns (out_fp, skipped).'''
         out_stem = '%s_%s' % (stem, abbrev)
         out_fp   = os.path.join(project_root_fp, out_stem + '.parquet')
@@ -1065,7 +1066,7 @@ class Process_ml_preprocess(Get_schema_table):
             df_orig[non_spectral].reset_index(drop=True),
             save_df.reset_index(drop=True),
         ], axis=1)
-        df_save.to_parquet(out_fp, index=False)
+        Save_parquet_with_units(df_save, out_fp, units_D)
         _proc = (step_info[0].get('process', 'unknown') if isinstance(step_info, list)
                  else step_info.get('process', 'unknown'))
         _write_previous_df(project_root_fp, _proc, [
@@ -1132,7 +1133,7 @@ class Process_ml_preprocess(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
 
-        df   = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
@@ -1168,7 +1169,7 @@ class Process_ml_preprocess(Get_schema_table):
             'filter': filter_cfg,
         }
         self._Accept_and_save(df, df_filtered, list(cols_out), abbrev,
-                               stem, project_root_fp, overwrite, step_info)
+                               stem, project_root_fp, overwrite, step_info, units_D)
 
     def _Multi_filter_spectra(self):
         p = self.process_S.process.parameters
@@ -1211,7 +1212,7 @@ class Process_ml_preprocess(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
 
-        df   = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
@@ -1247,7 +1248,7 @@ class Process_ml_preprocess(Get_schema_table):
             'multi_filter': mf_cfg,
         }
         self._Accept_and_save(df, df_filtered, list(cols_out), 'mf',
-                               stem, project_root_fp, overwrite, step_info)
+                               stem, project_root_fp, overwrite, step_info, units_D)
 
     # ------------------------------------------------------------------ ward clustering
 
@@ -1322,7 +1323,7 @@ class Process_ml_preprocess(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
 
-        df   = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
@@ -1387,7 +1388,7 @@ class Process_ml_preprocess(Get_schema_table):
             'agglomeration': cfg,
         }
         self._Accept_and_save(df, spec_out, out_cols, 'wc',
-                               stem, project_root_fp, overwrite, step_info)
+                               stem, project_root_fp, overwrite, step_info, units_D)
 
     # ------------------------------------------------------------------ univariate selection
 
@@ -1496,7 +1497,7 @@ class Process_ml_preprocess(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
 
-        df   = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
@@ -1583,7 +1584,7 @@ class Process_ml_preprocess(Get_schema_table):
                     'univariate_selector': cfg,
                 }
                 self._Accept_and_save(df, spec_out_df, retained_wl, abbrev,
-                                       stem, project_root_fp, overwrite, step_info)
+                                       stem, project_root_fp, overwrite, step_info, units_D)
 
         else:
             # Combined: average F-scores across all indicators
@@ -1644,7 +1645,7 @@ class Process_ml_preprocess(Get_schema_table):
                 'univariate_selector': cfg,
             }
             self._Accept_and_save(df, spec_out_df, retained_wl, 'uv',
-                                   stem, project_root_fp, overwrite, step_info)
+                                   stem, project_root_fp, overwrite, step_info, units_D)
 
     # ------------------------------------------------------------------ permutation / RFE / tree selector
 
@@ -1727,7 +1728,7 @@ class Process_ml_preprocess(Get_schema_table):
             except FileNotFoundError as e:
                 print('    ERROR: %s' % e)
                 return
-        df   = pd.read_parquet(parquet_fp)
+        df, units_D = Read_parquet_with_units(parquet_fp)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
@@ -1937,7 +1938,7 @@ class Process_ml_preprocess(Get_schema_table):
                 df[non_spectral].reset_index(drop=True),
                 spec_out.reset_index(drop=True),
             ], axis=1)
-            df_save.to_parquet(out_fp, index=False)
+            Save_parquet_with_units(df_save, out_fp, units_D)
             step_info = {
                 '_id': abbrev,
                 'process': 'spectra_indicator_permutation_selection',
@@ -2085,6 +2086,7 @@ class Process_ml_preprocess(Get_schema_table):
             inp['stem'], inp['project_root_fp'], inp['overwrite'],
             {'process': 'spectra_derivative',
              'parameters': {'derivative': derive, 'append': append}},
+            inp['units_D'],
         )
 
     def _Spectra_scatter_correction(self):
@@ -2113,6 +2115,7 @@ class Process_ml_preprocess(Get_schema_table):
             inp['stem'], inp['project_root_fp'], inp['overwrite'],
             {'process': 'spectra_scatter_correction',
              'parameters': {'scaler': scalers}},
+            inp['units_D'],
         )
 
     def _Spectra_scaling(self):
@@ -2142,6 +2145,7 @@ class Process_ml_preprocess(Get_schema_table):
             inp['stem'], inp['project_root_fp'], inp['overwrite'],
             {'process': 'spectra_scaling',
              'parameters': {'method': method}},
+            inp['units_D'],
         )
 
     def _Spectra_decomposition(self):
@@ -2174,6 +2178,7 @@ class Process_ml_preprocess(Get_schema_table):
             inp['stem'], inp['project_root_fp'], inp['overwrite'],
             {'process': 'spectra_decomposition',
              'parameters': {'method': method, 'n_components': n_actual}},
+            inp['units_D'],
         )
 
     def _Chemometric_default(self):
@@ -2234,4 +2239,5 @@ class Process_ml_preprocess(Get_schema_table):
             inp['df'], spec_final, cols_final, abbrev,
             inp['stem'], inp['project_root_fp'], inp['overwrite'],
             step_info_list,
+            inp['units_D'],
         )

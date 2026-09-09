@@ -30,6 +30,8 @@ from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_conf
 
 from src.ai4sh.feature_symbols import Load_feature_symbols
 
+from src.ai4sh.parquet_units import Read_parquet_with_units
+
 def _spectra_x_axis(columns):
     '''Return (x_values, x_label) appropriate for the given spectral column list.'''
     if not columns:
@@ -142,12 +144,17 @@ class Process_plot(Get_schema_table):
         if not parquet_matches:
             raise FileNotFoundError('No data-*.parquet file found in: %s' % project_root_fp)
 
-        df = pd.read_parquet(parquet_matches[0])
+        df, units_D = Read_parquet_with_units(parquet_matches[0])
 
         params_D = {}
         if params_matches:
             with open(params_matches[0]) as f:
                 params_D = json.load(f)
+
+        # Units embedded in the Parquet's column MultiIndex take priority over the (legacy)
+        # params-*.json copy, which is kept only as a fallback for older files.
+        if units_D:
+            params_D['indicator_units'] = units_D
 
         if self.verbose >= 1:
             n_samples = params_D.get('n_samples', len(df))

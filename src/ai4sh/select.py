@@ -21,6 +21,8 @@ from src.utils.json_read_write import Dump_json
 
 from src.ai4sh.feature_symbols import Load_target_units
 
+from src.ai4sh.parquet_units import Save_parquet_with_units
+
 
 class Process_select(Get_schema_table):
     '''Select a filtered spectral subset from the database and save locally as Parquet.'''
@@ -489,7 +491,7 @@ class Process_select(Get_schema_table):
         # ---- 7. Save ----
         os.makedirs(out_dir, exist_ok=True)
 
-        df.to_parquet(data_fpn, index=False)
+        Save_parquet_with_units(df, data_fpn, applied_units_D)
 
         params_D = {
             'dataset_name': p.dataset_name,
