@@ -19,6 +19,8 @@ from src.postgres.pg_ai4sh import PG_manage_AI4SH
 
 from src.utils.json_read_write import Dump_json
 
+from src.ai4sh.feature_symbols import Load_target_units
+
 
 class Process_select(Get_schema_table):
     '''Select a filtered spectral subset from the database and save locally as Parquet.'''
@@ -341,12 +343,68 @@ class Process_select(Get_schema_table):
         # ---- 5. Indicator DataFrame (pivot) ----
         if lab_recs:
 
-            lab_df = pd.DataFrame(lab_recs, columns=['sample_name', 'indicator_name', 'value'])
+            lab_df = pd.DataFrame(lab_recs, columns=['sample_name', 'indicator_name', 'value', 'unit_name'])
+
+            # Translate recorded units to the target unit from targetfeaturesymbols.json, so
+            # indicator values are always saved in one consistent unit per indicator — required
+            # for merging Parquet subsets from different provisions/datasets later on.
+            target_units_D = Load_target_units('default', self.verbose)
+
+            unit_skip_indicators = []
+
+            for indicator_name in list(lab_df['indicator_name'].unique()):
+
+                dst_unit = target_units_D.get(indicator_name)
+
+                if not dst_unit:
+                    continue
+
+                ind_mask = lab_df['indicator_name'] == indicator_name
+
+                for src_unit in lab_df.loc[ind_mask, 'unit_name'].unique():
+
+                    if not src_unit or src_unit == dst_unit:
+                        continue
+
+                    row_mask = ind_mask & (lab_df['unit_name'] == src_unit)
+
+                    try:
+
+                        lab_df.loc[row_mask, 'value'] = self.pg_ai4sh_C._Translate_unit_value(
+                            lab_df.loc[row_mask, 'value'], src_unit, dst_unit, self.pg_session_C)
+
+                    except Exception as e:
+
+                        print('    ⚠️  %s' % e)
+
+                        confirm = input(
+                            "⚠️ Continue without indicator '%s' (unit translation missing)? (y); stop(n): "
+                            % indicator_name)
+
+                        if confirm.lower() != 'y':
+
+                            print('    Skipping — output not saved.')
+
+                            return None
+
+                        unit_skip_indicators.append(indicator_name)
+
+                        break
+
+            if unit_skip_indicators:
+
+                lab_df = lab_df[~lab_df['indicator_name'].isin(unit_skip_indicators)]
+
+                indicators = [ind for ind in indicators if ind not in unit_skip_indicators]
+
+            lab_df = lab_df.drop(columns=['unit_name'])
 
             lab_pivot = lab_df.pivot_table(index='sample_name', columns='indicator_name',
                                             values='value', aggfunc='first')
 
             lab_pivot.columns.name = None
+
+            applied_units_D = {ind: target_units_D[ind] for ind in lab_pivot.columns if ind in target_units_D}
 
             missing_indicators = [ind for ind in indicators if ind not in lab_pivot.columns]
 
@@ -371,6 +429,8 @@ class Process_select(Get_schema_table):
         else:
 
             df = spectra_df
+
+            applied_units_D = {}
 
         # ---- 6. Data range filter ----
         range_excluded = 0
@@ -421,6 +481,7 @@ class Process_select(Get_schema_table):
             'min_profile': int(p.min_profile),
             'max_profile': int(p.max_profile),
             'indicator_array': indicators,
+            'indicator_units': applied_units_D,
             'data_range': data_range,
             'as_absorbance': as_absorbance,
             'output_wavelengths': [int(w) for w in output_wl],

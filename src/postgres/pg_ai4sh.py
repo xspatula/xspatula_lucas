@@ -16,6 +16,9 @@ class PG_manage_AI4SH:
         #Connect to the Postgres Server
         #PG_session.__init__(self, process_S.postgresdb.db, process_S.process.verbose, 'manage_xspatula')
 
+        # Cache of (src_unit_name, dst_unit_name) -> unit_translate row, resolved lazily
+        self._unit_translation_cache = {}
+
     #===== Custom project specific postgres functions =====
     def _Custom_function_SKIPPA(self, query_D):
         '''
@@ -273,6 +276,62 @@ class PG_manage_AI4SH:
 
             return rec[0]
     
+    def _Retrieve_unit_translation(self, query_D, pg_session_C):
+        '''query_D: {src_unit_name, dst_unit_name}. Returns (factor, addon, exponent, process) or None.'''
+
+        sql = "SELECT UT.factor, UT.addon, UT.exponent, UT.process \
+            FROM observation_utility.unit_translate AS UT \
+            INNER JOIN observation_utility.unit AS SRC ON UT.src_unit_id = SRC.id \
+            INNER JOIN observation_utility.unit AS DST ON UT.dst_unit_id = DST.id \
+            WHERE SRC.name = '%(src_unit_name)s' AND DST.name = '%(dst_unit_name)s';" % query_D
+
+        return pg_session_C._Execute_search_single_sql(sql)
+
+    def _Translate_unit_value(self, value, src_unit_name, dst_unit_name, pg_session_C):
+        '''Translate value(s) recorded in src_unit_name into dst_unit_name, using
+        observation_utility.unit_translate. value may be a scalar or a pandas Series.
+
+        Formula: dst_value = (src_value * factor + addon) ** exponent.
+
+        Raises Exception with actionable fix instructions if no translation row exists for the
+        (src_unit_name, dst_unit_name) pair, or NotImplementedError if the row specifies a
+        non-formulaic "process" (not yet supported).
+        '''
+
+        if not src_unit_name or src_unit_name == dst_unit_name:
+
+            return value
+
+        cache_key = (src_unit_name, dst_unit_name)
+
+        if cache_key not in self._unit_translation_cache:
+
+            self._unit_translation_cache[cache_key] = self._Retrieve_unit_translation(
+                {'src_unit_name': src_unit_name, 'dst_unit_name': dst_unit_name}, pg_session_C)
+
+        trans = self._unit_translation_cache[cache_key]
+
+        if trans is None:
+
+            raise Exception(
+                'Missing unit translation: "%s" -> "%s".\n'
+                '    Add a row to lucas/import_data/utility/observation/excel/unit_translate.xlsx:\n'
+                '      src_unit_id__unit_name = %s\n'
+                '      dst_unit_id__unit_name = %s\n'
+                '    You must determine factor, addon, exponent, process yourself.\n'
+                '    Then re-run lucas/import_data/insert_utility.ipynb to load it into the database.'
+                % (src_unit_name, dst_unit_name, src_unit_name, dst_unit_name))
+
+        factor, addon, exponent, process = trans
+
+        if process and process != 'None':
+
+            raise NotImplementedError(
+                'Unit translation "%s" -> "%s" uses process "%s", which is not yet implemented.'
+                % (src_unit_name, dst_unit_name, process))
+
+        return (value * factor + addon) ** exponent
+
     def _Retrieve_dataset_data_points(self, query_D, pg_session_C):
         '''
         '''
@@ -526,7 +585,10 @@ class PG_manage_AI4SH:
           dataset_name  - dataset name or alias
           lab_indicators - list of indicator names
 
-        Returns list of tuples: (sample_name, indicator_name, value)
+        Returns list of tuples: (sample_name, indicator_name, value, unit_name)
+        unit_name is the unit the provision behind the measurement records that indicator in
+        (observation_utility.provision_indicator.unit_id), or None if no provision/unit link
+        exists for that observation_log/indicator (e.g. legacy data with no provision_id set).
         '''
         if 'dataset_name' in query_D:
             resolved = self._Retrieve_name_from_name_alias(
@@ -562,7 +624,7 @@ class PG_manage_AI4SH:
 
         indicators_sql = ', '.join("'%s'" % name for name in name_map)
 
-        sql = "SELECT OS.name, OUI.name, OOM.value \
+        sql = "SELECT OS.name, OUI.name, OOM.value, OUU.name \
             FROM observation.observation_measurement AS OOM \
             INNER JOIN observation.observation AS OO ON OOM.observation_id = OO.id \
             INNER JOIN observation.sample AS OS ON OO.sample_id = OS.id \
@@ -571,6 +633,9 @@ class PG_manage_AI4SH:
             INNER JOIN observation.campaign AS OC ON OSL.campaign_id = OC.id \
             INNER JOIN observation.dataset AS OD ON OC.dataset_id = OD.id \
             INNER JOIN observation_utility.indicator AS OUI ON OOM.indicator_id = OUI.id \
+            LEFT JOIN observation_utility.provision_indicator AS OUPI \
+                ON OUPI.provision_id = OOL.provision_id AND OUPI.indicator_id = OOM.indicator_id \
+            LEFT JOIN observation_utility.unit AS OUU ON OUU.id = OUPI.unit_id \
             WHERE OD.name = '%(dataset_name)s' \
             AND OUI.name IN (%(indicators)s);" % {
                 'dataset_name': query_D['dataset_name'],
@@ -584,7 +649,7 @@ class PG_manage_AI4SH:
 
         # Return tuples with the original user-specified name/alias so callers
         # can match results back to the indicator labels from the process file
-        return [(r[0], name_map.get(r[1], r[1]), r[2]) for r in recs]
+        return [(r[0], name_map.get(r[1], r[1]), r[2], r[3]) for r in recs]
 
     def _Retrieve_observation_id_from_observationOLD(self, query_D):
 

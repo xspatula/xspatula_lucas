@@ -28,11 +28,7 @@ from src.ai4sh.chemometrics import (apply_transformations, apply_standardisation
 
 from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_config
 
-# Repo root: src/ai4sh/plot.py → up 2 levels
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-
-_DEFAULT_SYMBOLS_FPN = os.path.join(_REPO_ROOT, 'lucas', 'default', 'plot', 'targetfeaturesymbols.json')
-
+from src.ai4sh.feature_symbols import Load_feature_symbols
 
 def _spectra_x_axis(columns):
     '''Return (x_values, x_label) appropriate for the given spectral column list.'''
@@ -47,9 +43,8 @@ def _spectra_x_axis(columns):
     except (ValueError, TypeError):
         return list(range(len(columns))), 'Band'
 
-
 def _step_to_abbrev(step_label):
-    '''Return a short abbreviation for a single chemometric step label.
+    '''Return a short abbreviation for an individual chemometric step label.
 
     See ai4sh/default/chemometric/chemometric_abbreviations.md for the full table.
     '''
@@ -78,7 +73,6 @@ def _step_to_abbrev(step_label):
         return {'moving_average': 'ma', 'gauss': 'gf', 'savitzky-golay': 'sg',
                 'lowess': 'lw', 'multi_filter': 'mf'}.get(method, method[:4])
     return ''.join(c if c.isalnum() else '' for c in step_label.lower())[:6]
-
 
 class Process_plot(Get_schema_table):
     '''Plot indicator distributions (boxplot, histogram) from a saved Parquet dataset.'''
@@ -165,25 +159,12 @@ class Process_plot(Get_schema_table):
     def _Load_feature_symbols(self):
         '''Load targetfeaturesymbols JSON. Returns the inner dict keyed by indicator name.
 
-        "default" → loads from ai4sh/default/plot/targetfeaturesymbols.json.
+        "default" → loads from lucas/default/plot/targetfeaturesymbols.json.
         Any other value is treated as a file path.
         '''
         raw = getattr(self.process_S.process.parameters, 'targetfeaturesymbols', 'default')
 
-        if not raw or str(raw).strip().lower() == 'default':
-            fpn = _DEFAULT_SYMBOLS_FPN
-        else:
-            fpn = str(raw).strip()
-
-        if not os.path.exists(fpn):
-            if self.verbose >= 1:
-                print('    Warning: targetfeaturesymbols file not found: %s — using fallback labels.' % fpn)
-            return {}
-
-        with open(fpn) as f:
-            data = json.load(f)
-
-        return data.get('targetFeatureSymbols', {})
+        return Load_feature_symbols(raw, self.verbose)
 
     def _Build_plot_output_path(self, project_root_fp):
         '''Create and return the plot output directory under project_root_fp/plot/.'''
@@ -206,7 +187,7 @@ class Process_plot(Get_schema_table):
         return color, label, unit
 
     def _build_transform_info(self, indicator, transform_dict, standard_dict):
-        '''Return (annotation_str, filename_suffix) for a single indicator.'''
+        '''Return (annotation_str, filename_suffix) for an individual indicator.'''
 
         transform = transform_dict.get(indicator, 'linear')
         standardised = standard_dict.get(indicator, 'none') != 'none'
@@ -284,46 +265,48 @@ class Process_plot(Get_schema_table):
         plt.close(fig)
 
     def _Histogram_plot(self, df, indicators, symbols, bins, show, save, plot_dir,
-                        transform_dict=None, standard_dict=None):
-        '''Plot histograms for each indicator — singles then multi-column grid.'''
+                        transform_dict=None, standard_dict=None,
+                        individual_canvas_plot=True, single_canvas_plot=False):
+        '''Plot histograms for each indicator — individual canvases then multi-column grid canvas.'''
 
         n_cols = 3
 
         transform_dict = transform_dict or {}
         standard_dict = standard_dict or {}
 
-        # --- Singles ---
-        for indicator in indicators:
+        # --- Individual canvases ---
+        if individual_canvas_plot:
+            for indicator in indicators:
 
-            if indicator not in df.columns:
-                if self.verbose >= 1:
-                    print('    Warning: indicator "%s" not in DataFrame — skipping.' % indicator)
-                continue
+                if indicator not in df.columns:
+                    if self.verbose >= 1:
+                        print('    Warning: indicator "%s" not in DataFrame — skipping.' % indicator)
+                    continue
 
-            series = df[indicator].dropna()
-            color, label, unit = self._Get_symbol(symbols, indicator)
-            ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
+                series = df[indicator].dropna()
+                color, label, unit = self._Get_symbol(symbols, indicator)
+                ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
 
-            fig, ax = plt.subplots(figsize=(6, 4))
-            series.plot.hist(bins=bins, color=color, ax=ax)
-            ax.set_title(label)
-            ax.set_xlabel(unit)
-            ax.text(0.98, 0.98, ann, transform=ax.transAxes, fontsize=7,
-                    ha='right', va='top', color='gray')
+                fig, ax = plt.subplots(figsize=(6, 4))
+                series.plot.hist(bins=bins, color=color, ax=ax)
+                ax.set_title(label)
+                ax.set_xlabel(unit)
+                ax.text(0.98, 0.98, ann, transform=ax.transAxes, fontsize=7,
+                        ha='right', va='top', color='gray')
 
-            if save:
-                fpn = os.path.join(plot_dir, 'histogram_%s%s.png' % (indicator, suffix))
-                fig.savefig(fpn, bbox_inches='tight')
-                if self.verbose >= 1:
-                    print('    Saved: %s' % fpn)
+                if save:
+                    fpn = os.path.join(plot_dir, 'histogram_%s%s.png' % (indicator, suffix))
+                    fig.savefig(fpn, bbox_inches='tight')
+                    if self.verbose >= 1:
+                        print('    Saved: %s' % fpn)
 
-            if show:
-                plt.show()
+                if show:
+                    plt.show()
 
-            plt.close(fig)
+                plt.close(fig)
 
-        # --- Multi-column grid (separate pass so singles are fully closed first) ---
-        if len(indicators) > 1:
+        # --- Multi-column grid (separate pass so individual plots are fully closed first) ---
+        if len(indicators) > 1 and single_canvas_plot:
 
             n_rows = ceil(len(indicators) / n_cols)
             multi_fig, multi_axs = plt.subplots(
@@ -369,49 +352,51 @@ class Process_plot(Get_schema_table):
             plt.close(multi_fig)
 
     def _Boxplot_plot(self, df, indicators, symbols, show, save, plot_dir,
-                      transform_dict=None, standard_dict=None):
-        '''Plot boxplots for each indicator — singles then multi-column grid.'''
+                      transform_dict=None, standard_dict=None,
+                      individual_canvas_plot=True, single_canvas_plot=False):
+        '''Plot boxplots for each indicator — individual canvases then multi-column grid canvas.'''
 
         n_cols = 3
         transform_dict = transform_dict or {}
         standard_dict = standard_dict or {}
 
-        # --- Singles ---
-        for indicator in indicators:
+        # --- Individual canvases ---
+        if individual_canvas_plot:
+            for indicator in indicators:
 
-            if indicator not in df.columns:
-                if self.verbose >= 1:
-                    print('    Warning: indicator "%s" not in DataFrame — skipping.' % indicator)
-                continue
+                if indicator not in df.columns:
+                    if self.verbose >= 1:
+                        print('    Warning: indicator "%s" not in DataFrame — skipping.' % indicator)
+                    continue
 
-            color, label, unit = self._Get_symbol(symbols, indicator)
-            ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
+                color, label, unit = self._Get_symbol(symbols, indicator)
+                ann, suffix = self._build_transform_info(indicator, transform_dict, standard_dict)
 
-            fig, ax = plt.subplots(figsize=(4, 5))
-            df.boxplot(
-                column=[indicator],
-                patch_artist=True,
-                boxprops=dict(facecolor=color),
-                ax=ax
-            )
-            ax.set_title(label)
-            ax.set_xlabel(unit)
-            ax.text(0.98, 0.98, ann, transform=ax.transAxes, fontsize=7,
-                    ha='right', va='top', color='gray')
+                fig, ax = plt.subplots(figsize=(4, 5))
+                df.boxplot(
+                    column=[indicator],
+                    patch_artist=True,
+                    boxprops=dict(facecolor=color),
+                    ax=ax
+                )
+                ax.set_title(label)
+                ax.set_xlabel(unit)
+                ax.text(0.98, 0.98, ann, transform=ax.transAxes, fontsize=7,
+                        ha='right', va='top', color='gray')
 
-            if save:
-                fpn = os.path.join(plot_dir, 'boxplot_%s%s.png' % (indicator, suffix))
-                fig.savefig(fpn, bbox_inches='tight')
-                if self.verbose >= 1:
-                    print('    Saved: %s' % fpn)
+                if save:
+                    fpn = os.path.join(plot_dir, 'boxplot_%s%s.png' % (indicator, suffix))
+                    fig.savefig(fpn, bbox_inches='tight')
+                    if self.verbose >= 1:
+                        print('    Saved: %s' % fpn)
 
-            if show:
-                plt.show()
+                if show:
+                    plt.show()
 
-            plt.close(fig)
+                plt.close(fig)
 
-        # --- Multi-column grid (separate pass so singles are fully closed first) ---
-        if len(indicators) > 1:
+        # --- Multi-column grid (separate pass so individual canvases are fully closed first) ---
+        if len(indicators) > 1 and single_canvas_plot:
 
             n_rows = ceil(len(indicators) / n_cols)
             multi_fig, multi_axs = plt.subplots(
@@ -525,6 +510,10 @@ class Process_plot(Get_schema_table):
         df, transform_dict = apply_transformations(df, indicators, transformation_param, self.verbose)
         df, standard_dict = apply_standardisation(df, indicators, standardisation_param, self.verbose)
 
+        if params_D and 'indicator_units' not in params_D:
+            print('    Warning: this Parquet was built before unit tracking was added to select_spectra — '
+                  'units are not guaranteed to match targetfeaturesymbols.json. Re-run select to be sure.')
+
         # Load symbols
         symbols = self._Load_feature_symbols()
 
@@ -534,16 +523,20 @@ class Process_plot(Get_schema_table):
         show = getattr(p, 'show', True)
         save = getattr(p, 'save', False)
         bins = getattr(p, 'bins', 10)
+        single_canvas_plot = getattr(p, 'single_canvas_plot', False)
+        individual_canvas_plot = getattr(p, 'individual_canvas_plot', True)
 
         plot_dir = self._Build_plot_output_path(project_root_fp) if save else None
 
         if do_histogram:
             self._Histogram_plot(df, indicators, symbols, bins, show, save, plot_dir,
-                                 transform_dict, standard_dict)
+                                 transform_dict, standard_dict,
+                                 individual_canvas_plot, single_canvas_plot)
 
         if do_boxplot:
             self._Boxplot_plot(df, indicators, symbols, show, save, plot_dir,
-                               transform_dict, standard_dict)
+                               transform_dict, standard_dict,
+                               individual_canvas_plot, single_canvas_plot)
 
     def _Plot_spectra(self):
         '''Plot spectra through each chemometric step from a saved Parquet dataset.'''
