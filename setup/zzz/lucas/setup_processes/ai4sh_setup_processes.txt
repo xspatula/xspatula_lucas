@@ -162,6 +162,10 @@ landscape/observation_lucc_v10_sql.json
 
 select/select_data_v10_sql.json
 
+### PANDAS ###
+
+pandas/pandas_inspect_v10_sql.json
+
 ### PLOT ###
 
 plot/plot_v10_sql.json
