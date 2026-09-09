@@ -59,6 +59,19 @@ def write_process_json(path, process_name, parameters):
         json.dump(payload, f, indent=2)
 
 
+def write_job_json(path, job_folder, process_sub_folder, pilot_file):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    payload = {
+        "process": {
+            "job_folder": job_folder,
+            "process_sub_folder": process_sub_folder,
+            "pilot_file": pilot_file,
+        }
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
 def write_pilot_txt(dir_path, category, filenames):
     os.makedirs(dir_path, exist_ok=True)
     header = (
@@ -367,6 +380,36 @@ def step7_spectra_observation(rows, idx, spc_columns):
 
 
 # ---------------------------------------------------------------------------
+# step8 - top-level job_LUCAS_2009_*.json files
+# ---------------------------------------------------------------------------
+
+# (job suffix, dir relative to OUTPUT_ROOT, pilot file name)
+JOB_FILE_SPECS = [
+    ("campaign", "process_lab/campaign", "xspatula_add_campaign_pilot.txt"),
+    ("geolocation", "process_lab/geolocation", "xspatula_add_geolocation_pilot.txt"),
+    ("observation_lab", "process_lab/observation", "xspatula_add_observation_pilot.txt"),
+    ("observation_log_lab", "process_lab/observation_log", "xspatula_add_observation_log_pilot.txt"),
+    ("observation_log_spectra", "process_spectra/observation_log", "xspatula_add_observation_log_pilot.txt"),
+    ("observation_spectra", "process_spectra/observation", "xspatula_add_observation_pilot.txt"),
+    ("sample", "process_lab/sample", "xspatula_add_sample_pilot.txt"),
+    ("sampling_log", "process_lab/sampling_log", "xspatula_add_sampling_log_pilot.txt"),
+    ("spectrometer", "process_spectra/spectrometer", "xspatula_add_spectrometer_pilot.txt"),
+]
+
+
+def step8_job_files():
+    for suffix, sub_path, pilot_file in JOB_FILE_SPECS:
+        job_folder = f"import_data/LUCAS_2009/{sub_path}"
+        filename = f"job_LUCAS_2009_{suffix}.json"
+        write_job_json(
+            os.path.join(OUTPUT_ROOT, filename),
+            job_folder,
+            "manage_process",
+            pilot_file,
+        )
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -404,6 +447,7 @@ def main():
         ("step5 - sample", step5_sample, (record_rows, idx)),
         ("step6 - process_lab/observation", step6_lab_observation, (record_rows, idx)),
         ("step7 - process_spectra/observation", step7_spectra_observation, (record_rows, idx, spc_columns)),
+        ("step8 - job_LUCAS_2009_*.json files", step8_job_files, ()),
     ]
 
     failures = []
