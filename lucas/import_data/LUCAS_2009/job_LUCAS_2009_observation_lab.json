@@ -1,7 +1,0 @@
-{
-  "process": {
-    "job_folder": "import_data/LUCAS_2009/process_lab/observation",
-    "process_sub_folder": "manage_process",
-    "pilot_file": "xspatula_add_observation_pilot.txt"
-  }
-}

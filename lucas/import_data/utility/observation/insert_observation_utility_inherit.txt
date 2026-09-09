@@ -21,7 +21,7 @@
 provision.json
 
 # Provision indicator links observation values delivered by a specific provision to quantities and an indicators.
-# require: provision, indicator, method, unit.
+# require: provision, indicator, method_tier, unit.
 # You can add provision indicators in provision_indicator.xls and rerun this insert.
 provision_indicator.json
 

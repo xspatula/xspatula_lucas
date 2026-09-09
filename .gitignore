@@ -73,6 +73,10 @@ lucas/import_data/utility/general/insert_process/staging
 lucas/import_data/utility/landscape/insert_process/staging
 lucas/import_data/utility/observation/insert_process/staging
 
+# =============================================================
+# .claude
+# =============================================================
+.claude/
 
 # =============================================================
 # LUCAS separate data

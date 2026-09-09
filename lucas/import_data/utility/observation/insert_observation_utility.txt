@@ -30,7 +30,7 @@ apparatus.json
 # You can add classification order in classification_order.xls and rerun this insert.
 classification_order.json
 
-# TG TODO Image does not exists
+# LEFT TODO Image does not exists
 
 # License to attach to either dataset or campaign
 # You can add a license in license.xls and rerun this insert.
@@ -40,7 +40,7 @@ license.json
 # You can add a location method in location_method.xls and rerun this insert.
 location_method.json
 
-# TG TODO
+# LEFT TODO
 # -macrofauna_extraction_method,
 # -life_cycle_stage
 
@@ -48,7 +48,7 @@ location_method.json
 # You can add method tiers method in method_tier.xls and rerun this insert.
 method_tier.json
 
-# TG TODO
+# LEFT TODO
 # Monolith extraction method (e.g. block of soil, sediment or ice-core).
 #monolith_extraction.json
 
@@ -69,7 +69,7 @@ provider.json
 # You can add quantitates in quantity.xls and rerun this insert.
 quantity.json
 
-# TG TODO
+# LEFT TODO
 # Reference proprietor - any source of external archive or library used for deriving observation values
 # You can add reference proprietor in reference_proprietor.xls and rerun this insert.
 #reference_proprietor.json
@@ -79,10 +79,10 @@ quantity.json
 # You can add setting systems in setting_system.xls and rerun this insert.
 setting_system.json
 
-# TG TODO
+# LEFT TODO
 # Soil horizon for defining scientific soil horizons.
 
-# TG TODO
+# LEFT TODO
 # Sound includes tables for:
 # -sound_setup,
 # -sound_mic.
@@ -91,7 +91,7 @@ setting_system.json
 # You can add spatial reference systems in spatial_reference.xls and rerun this insert.
 spatial_reference.json
 
-# TG TODO
+# LEFT TODO
 # Spectroscopy method for defining type of spectral analysis.
 # You can add spectroscopy methods systems in spectroscopy_method.xls and rerun this insert.
 #spectroscopy_method.json
@@ -100,7 +100,7 @@ spatial_reference.json
 # You can add storage methods in storage.xls and rerun this insert.
 storage.json
 
-# TG TODO
+# LEFT TODO
 # Taxa levels in the Linnean classification system.
 # Taxa status to handle outdated and redundant taxa definitions.
 
@@ -116,7 +116,7 @@ unit.json
 #==== Observation utilities dependent on foreign keys in other observation utilities ====#
 #===========================================#
 
-# TG TODO
+# LEFT TODO
 # Analysis method translate for converting analysis results between comparable methods.
 
 # Classification family is the second level of thematic feature definition
@@ -133,12 +133,9 @@ classification_family.json
 # You can add classification genus in classification_genus.xls and rerun this insert.
 classification_genus.json
 
-# Classification species is the most details level of thematic feature definition
+# Classification species is the most details level of thematic feature definition - there are as yet no classification species defined
 # The species "unknown" is predefined and can be used for any sample, but you can then not use Xspatula for analysis and modelling.
 # require: classification_genus.
-# You can add classification species in classification_species.xls and rerun this insert.
-# TG TODO species does not yet exist
-#species.json
 
 # Indicators refine quantitates to more detailed definitions that are then used for reporting observation values.
 # require: quantity.
@@ -160,25 +157,25 @@ juxtaposition.json
 # You can add profiling in profiling.xls and rerun this insert.
 profiling.json
 
-# TG TODO
+# LEFT TODO
 # Quantity default unit is the default unit for a particular quantity and species, with the option of setting a metric (default) or imperial system.
 # require: quantity, species, unit.
 # You can add quantity default units in quantity_default_unit.xls and rerun this insert.
 #quantity_default_unit.json
 
-# TG TODO
+# LEFT TODO
 # Taxa defines arbitrary taxa with its Linnean classification level
 # require: taxa_level, taxa_status
 
-# TG TODO
+# LEFT TODO
 # Taxa function defines ecosystem functions related to a taxa
 # require: taxa_level, taxa_status.
 
-#TG TODO
+
 # Unit translate defines the mathematical translation between different units.
 # require: unit.
 # You can add unit translations in unit_translate.xls and rerun this insert.
-#unit_translate.json
+unit_translate.json
 
 #=======================================#
 #====== Dataset generic utilities ======#
@@ -186,23 +183,6 @@ profiling.json
 #=======================================#
 #!!!!! Before you can add datasets, campaigns, sampling and observation logs, observation and measured vales,
 # you have to make sure that all relevant utility data is defined.
-
-###===========================================###
-### LANDSCAPE UTILITIES ###
-###===========================================###
-
-# TG TODO
-# Crop growth stage
-#crop_growth_stage.json
-
-# TG TODO
-# cultivation species
-# erosion_conservation_measures
-# ground conditions
-# major_landform
-# sky_conditions
-# slope_position
-# field_preparation
 
 ###=================###
 ### EDNA UTILITIES ###

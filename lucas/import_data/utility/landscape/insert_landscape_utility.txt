@@ -17,36 +17,42 @@
 #===========================================#
 
 # Crop growth stage
-### REMOVE TO RUN###crop_growth_stage.json
+# You can edit crop growth stages in crop_growth_stage.xlsx and rerun this translation.
+### REMOVE TO RUN ###crop_growth_stage.json
 
 # Major landform
-### REMOVE TO RUN###major_landform.json
+# You can edit major landforms in major_landform.xlsx and rerun this translation.
+### REMOVE TO RUN ###major_landform.json
 
 # Slope position
-### REMOVE TO RUN###slope_position.json
+# You can edit slope positions in slope_position.xlsx and rerun this translation.
+### REMOVE TO RUN ###slope_position.json
 
 # Sky condition
-### REMOVE TO RUN###sky_conditions.json
+# You can edit sky conditions in sky_condition.xlsx and rerun this translation.
+### REMOVE TO RUN ###sky_condition.json
 
 # Ground condition
-### REMOVE TO RUN###ground_conditions.json
+# You can edit ground conditions in ground_condition.xlsx and rerun this translation.
+### REMOVE TO RUN ###ground_conditions.json
 
 # Soil preparation
-### REMOVE TO RUN###soil_preparation.json
+# You can edit soil preparations in soil_preparation.xlsx and rerun this translation.
+### REMOVE TO RUN ###soil_preparation.json
 
 # Reference soil groups contain the FAO defined soil groups.
 # You can edit the soil groups in reference_soil_groups.xlsx and rerun this translation.
-### REMOVE TO RUN###reference_soil_groups.json
+### REMOVE TO RUN ###reference_soil_groups.json
 
 # Soil texture classification USDA contain the United States Department of Agriculture soil texture groups.
 # You can edit the USDA soil texture groups in soil_texture_classification_USDA.xlsx and rerun this translation.
-### REMOVE TO RUN###soil_texture_classification_USDA.json
+### REMOVE TO RUN ###soil_texture_classification_USDA.json
 
 # Soil texture classification ISSS contain the International Society of Soil Science defined soil texture groups.
 # You can edit the ISSS soil texture groups in soil_texture_classification_ISSS.xlsx and rerun this translation.
-### REMOVE TO RUN###soil_texture_classification_ISSS.json
+### REMOVE TO RUN ###soil_texture_classification_ISSS.json
 
-# TG TODO
+# LEFT TODO
 # Koeppen Geiger climate zones.
 # You can edit the Koeppen Geiger climate zones in .....xlsx and rerun this translation.
 
@@ -80,11 +86,10 @@ land_cover_family.json
 # You can add landcover family in land_cover_genus.xls and rerun this translation.
 land_cover_genus.json
 
-
 ###===========================================###
 ### LANDSCAPE UTILITIES ###
 ###===========================================###
 
-# TG TODO
+# LEFT TODO
 # cultivation species
 # erosion_conservation_measures
