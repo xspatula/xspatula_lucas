@@ -121,6 +121,30 @@
               }
             },
             {
+              "parameter": "output_unit",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "reflectance",
+              "hint": "Desired output unit, reflectance, absorbance or ...",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "spectrometer",
+                "write": false
+              }
+            },
+            {
+              "parameter": "output_band_unit",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "um",
+              "hint": "Desired output band unit, nm, um, wavenumber",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "spectrometer",
+                "write": false
+              }
+            },
+            {
               "parameter": "min_profile",
               "parameter_type": "integer",
               "required": false,

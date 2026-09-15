@@ -385,7 +385,6 @@ def step7_spectra_observation(rows, idx, spc_columns):
 
 # (job suffix, dir relative to OUTPUT_ROOT, pilot file name)
 JOB_FILE_SPECS = [
-    ("campaign", "process_lab/campaign", "xspatula_add_campaign_pilot.txt"),
     ("geolocation", "process_lab/geolocation", "xspatula_add_geolocation_pilot.txt"),
     ("observation_lab", "process_lab/observation", "xspatula_add_observation_pilot.txt"),
     ("observation_log_lab", "process_lab/observation_log", "xspatula_add_observation_log_pilot.txt"),

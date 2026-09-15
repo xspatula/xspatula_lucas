@@ -39,7 +39,7 @@
     "k-ext": {
       "color": "lightcyan",
       "alpha": 0.2,
-      "label": "Extractable potassion (K)",
+      "label": "Extractable potassium (K)",
       "unit": "native"
     },
     "n-tot": {
