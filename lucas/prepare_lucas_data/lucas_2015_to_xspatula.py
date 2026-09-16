@@ -17,9 +17,11 @@ Input files must all be placed directly under `CSV_PATH`:
 `RECORDS` caps how many rows are read from the main csv, and independently how
 many spectra scan rows are read in total across all country files (0 = all).
 
-None of the 2015 input files carry any date/timestamp column (unlike 2009), so
-every generated JSON omits `observed_at`/`sampled_at` and uses the placeholder
-"00000000" in place of a date in filenames.
+None of the 2015 input files carry any date/timestamp column (unlike 2009). The
+LUCAS 2015 field campaign ran May-October 2015, so a representative date
+(`MISSING_DATE_TOKEN` = "20150801", roughly the survey midpoint) is used as
+`observed_at`/`sampled_at` throughout - lab, spectra and landscape observations
+alike - and in place of a per-record date in filenames.
 
 Every point has exactly one row in the main csv but (almost always) two spectral
 scans in the country spectra files; the two scans become two separate spectra
@@ -47,15 +49,18 @@ built instead from the existing `manage_land_cover_observation` /
 resolved by name-or-alias - the lower-cased LC1/LU1 code (e.g. "a11", "u111") is
 passed directly, since land_cover_genus.xlsx / land_use_genus.xlsx aliases follow
 that convention (and so do the order/family levels above them, which the DB
-insert process auto-mirrors down into genus-level entries). Neither process takes
-an observation_log or provision, so process_landscape has no observation_log step,
-unlike process_lab/process_spectra - just `land_cover` and `land_use` subfolders.
-A handful of LC1/LU1 codes present in the raw 2015 data (LANDCOVER_SKIP_CODES /
-LANDUSE_SKIP_CODES below) have no matching entry anywhere in the land_cover/
-land_use order/family/genus hierarchy yet; those rows are skipped and reported at
-the end of the run rather than generating JSON that would fail to load. Once the
-missing codes are added to the appropriate xlsx level and the insert_process is
-re-run, remove them from the skip set here and re-run this script.
+insert process auto-mirrors down into genus-level entries).
+
+process_landscape/observation_log holds a single shared landscape observation_log
+(provision "landscape"), and every land_cover/land_use record references it via
+`observation_log_id__observation_log_name` (plus `provision_id__provision_name`).
+
+NOTE - schema gap: as of this writing, `manage_observation_log` has no `in-situ`
+parameter, and `manage_land_cover_observation`/`manage_land_use_observation` have
+no `observation_log_id__observation_log_name`/`provision_id__provision_name`
+parameter at all. These fields are generated anyway, in anticipation of a planned
+schema update; until that lands, loading process_landscape/observation_log and the
+land_cover/land_use records that reference it will fail.
 
 To run this script:
 - set the number of RECORDS to test with (0 = all records),
@@ -91,18 +96,19 @@ CONTACT_EMAIL = "inherit"
 CAMPAIGN_NAME = "lucas_eu_2015"
 LAB_PROVISION = "lucas-wetlab-2015"
 SPECTRA_PROVISION = "foss xds rca"  # same instrument as 2009, different serial
+LANDSCAPE_PROVISION = "landscape"
 LAB_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{SPECTRA_PROVISION}"
+LANDSCAPE_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LANDSCAPE_PROVISION}"
 SPECTROMETER_PROVISION_ID = "foss-xds-rca"
 SPECTROMETER_SERIAL = "lucas 2015"
 WAVELENGTH_UNIT = "nm"
 
-MISSING_DATE_TOKEN = "00000000"
-
-# LC1/LU1 codes (lowercased) present in the raw 2015 data that have no match at
-# any level (order/family/genus) of the land_cover/land_use hierarchy yet.
-LANDCOVER_SKIP_CODES = {"a30", "h22"}
-LANDUSE_SKIP_CODES = set()
+# LUCAS 2015 fieldwork ran May-October 2015; no per-point date is available, so
+# this representative date (survey midpoint) stands in for observed_at/sampled_at
+# everywhere, and for the date segment of generated filenames.
+MISSING_DATE_TOKEN = "20150801"
+DEFAULT_OBSERVED_AT = "2015-08-01T00:00:00+00:00"
 
 if OUTPUT_ROOT.startswith(".."):
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -202,6 +208,7 @@ def step1_sampling_log():
 def step2_observation_log():
     lab_dir = os.path.join(OUTPUT_ROOT, "process_lab", "observation_log")
     spectra_dir = os.path.join(OUTPUT_ROOT, "process_spectra", "observation_log")
+    landscape_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "observation_log")
 
     lab_params = {
         "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
@@ -240,6 +247,22 @@ def step2_observation_log():
         spectra_params,
     )
     write_pilot_txt(spectra_dir, "OBSERVATION_LOG", [spectra_filename])
+
+    landscape_params = {
+        "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+        "provision_id__provision_name": LANDSCAPE_PROVISION,
+        "name": LANDSCAPE_OBSERVATION_LOG_NAME,
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
+        "in-situ": 1,  # NOTE: not yet a manage_observation_log parameter, pending schema update
+    }
+    landscape_filename = f"{LANDSCAPE_OBSERVATION_LOG_NAME}_observation_log.json"
+    write_process_json(
+        os.path.join(landscape_dir, "manage_process", landscape_filename),
+        "manage_observation_log",
+        landscape_params,
+    )
+    write_pilot_txt(landscape_dir, "OBSERVATION_LOG", [landscape_filename])
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +342,7 @@ def step5_sample(records):
             "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
             "tag": point_id,
             "name": sample_name(point_id),
+            "sampled_at": MISSING_DATE_TOKEN,
             "species_id__species_name": "soil",
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             "profile_min": 0,
@@ -375,6 +399,7 @@ def step6_lab_observation(records):
             "provision_id__provision_name": LAB_PROVISION,
             "subsample": "a",
             "replicate": 0,
+            "observed_at": DEFAULT_OBSERVED_AT,
         }
         for column, indicator_key in LAB_INDICATOR_COLUMNS:
             value = record.get(column)
@@ -406,6 +431,7 @@ def step7_spectra_observation(spectra_entries):
             "provision_id__provision_name": SPECTRA_PROVISION,
             "subsample": subsample,
             "replicate": 0,
+            "observed_at": DEFAULT_OBSERVED_AT,
             "provision_serial_nr_id__provision_serial_nr_name": SPECTROMETER_SERIAL,
             "@diffuse reflectance": (1 / np.exp(np.array(values))).tolist(),
         }
@@ -426,20 +452,19 @@ def step7_spectra_observation(spectra_entries):
 def step8_land_cover(records):
     land_cover_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "land_cover")
     filenames = []
-    skipped = {}
     for record in records:
         code = record.get("LC1")
         if not code:
-            continue
-        if code in LANDCOVER_SKIP_CODES:
-            skipped[code] = skipped.get(code, 0) + 1
             continue
         point_id = record["POINT_ID"]
         iso_country = record["iso.country"]
         params = {
             "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
+            "provision_id__provision_name": LANDSCAPE_PROVISION,
             "landcover_genus_id__landcover_genus_name": code,
+            "observed_at": DEFAULT_OBSERVED_AT,
         }
         filename = f"{CAMPAIGN_NAME}_{point_id}_land_cover.json"
         write_process_json(
@@ -449,11 +474,6 @@ def step8_land_cover(records):
         )
         filenames.append(filename)
     write_pilot_txt(land_cover_dir, "LAND_COVER", filenames)
-    if skipped:
-        print("  Skipped LC1 codes not yet in the land_cover order/family/genus hierarchy"
-              " (add to land_cover_genus.xlsx and re-run its insert_process):")
-        for code, count in sorted(skipped.items()):
-            print(f"    {code.upper()}: {count} record(s)")
 
 
 # ---------------------------------------------------------------------------
@@ -463,20 +483,19 @@ def step8_land_cover(records):
 def step9_land_use(records):
     land_use_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "land_use")
     filenames = []
-    skipped = {}
     for record in records:
         code = record.get("LU1")
         if not code:
-            continue
-        if code in LANDUSE_SKIP_CODES:
-            skipped[code] = skipped.get(code, 0) + 1
             continue
         point_id = record["POINT_ID"]
         iso_country = record["iso.country"]
         params = {
             "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
+            "provision_id__provision_name": LANDSCAPE_PROVISION,
             "landuse_genus_id__landuse_genus_name": code,
+            "observed_at": DEFAULT_OBSERVED_AT,
         }
         filename = f"{CAMPAIGN_NAME}_{point_id}_land_use.json"
         write_process_json(
@@ -486,11 +505,6 @@ def step9_land_use(records):
         )
         filenames.append(filename)
     write_pilot_txt(land_use_dir, "LAND_USE", filenames)
-    if skipped:
-        print("  Skipped LU1 codes not yet in the land_use order/family/genus hierarchy"
-              " (add to land_use_genus.xlsx and re-run its insert_process):")
-        for code, count in sorted(skipped.items()):
-            print(f"    {code.upper()}: {count} record(s)")
 
 
 # ---------------------------------------------------------------------------
@@ -504,6 +518,7 @@ JOB_FILE_SPECS = [
     ("observation_log_lab", "process_lab/observation_log", "xspatula_add_observation_log_pilot.txt"),
     ("observation_log_spectra", "process_spectra/observation_log", "xspatula_add_observation_log_pilot.txt"),
     ("observation_spectra", "process_spectra/observation", "xspatula_add_observation_pilot.txt"),
+    ("observation_log_landscape", "process_landscape/observation_log", "xspatula_add_observation_log_pilot.txt"),
     ("sample", "process_lab/sample", "xspatula_add_sample_pilot.txt"),
     ("sampling_log", "process_lab/sampling_log", "xspatula_add_sampling_log_pilot.txt"),
     ("spectrometer", "process_spectra/spectrometer", "xspatula_add_spectrometer_pilot.txt"),
@@ -611,7 +626,7 @@ def load_spectra(spectra_dir, limit=0):
 
 
 def load_all_records():
-    header, idx, rows = load_main_csv(os.path.join(CSV_PATH, MAIN_CSV_FILENAME))
+    _header, idx, rows = load_main_csv(os.path.join(CSV_PATH, MAIN_CSV_FILENAME))
     coords = load_coords(os.path.join(CSV_PATH, COORDS_DBF_FILENAME))
     records = main_csv_records(rows, idx, coords, limit=RECORDS)
 
