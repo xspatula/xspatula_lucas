@@ -1,126 +1,108 @@
-"""Translate the LUCAS 2009 soil sampling campaign into xspatula JSON import files.
+"""Translate the LUCAS 2015 soil sampling campaign into xspatula JSON import files.
 
-Creates the xspatula hierarchical strrucute of a pilot (txt) file and JSON command
-files required for inserting the LUCAS 2009 dataset in the database.
+Creates the xspatula hierarchical structure of pilot (txt) files and JSON command
+files required for inserting the LUCAS 2015 dataset in the database: process_lab
+and process_spectra (mirroring lucas_2009_to_xspatula.py), plus a new
+process_landscape (land cover / land use, see below).
 
-Input files must all be placed directly under `CSV_PATH`, using their names as
-downloaded from https://esdac.jrc.ec.europa.eu/projects/lucas (after registration):
+Input files must all be placed directly under `CSV_PATH`:
 
-    LUCAS.SOIL_corr.csv                  - main 2009 campaign (with spectra)
-    PTotal2009.dbf                       - total phosphorus, joined onto existing records
-    SoilAttr_ICELAND.dbf                 - complement, Iceland
-    SoilAttr_LUCAS_2009_CYP_MLT.dbf      - complement, Cyprus/Malta
-    SoilAttr_LUCAS_2012_BG_RO.dbf        - complement, Bulgaria/Romania
+    LUCAS_Topsoil_2015_20200323.csv   - main lab/site campaign (copy of the plain
+                                         csv also downloadable as part of the
+                                         LUCAS2015_topsoildata_20200323 package)
+    LUCAS_Topsoil_2015_20200323.dbf   - Point_ID -> Long/Lat lookup (the plain csv
+                                         itself carries no coordinates)
+    spectra/spectra_*.csv             - one file per country, as downloaded
 
-Each file is only read if its `INCLUDE_*` flag below is True. `RECORDS` caps how
-many rows are imported from *each* enabled file independently (0 = all rows).
+`RECORDS` caps how many rows are read from the main csv, and independently how
+many spectra scan rows are read in total across all country files (0 = all).
 
-None of the SoilAttr_*.dbf complement files carry SURV_DATE/date, so rows sourced
-from them omit `sampled_at`/`observed_at` from the generated JSON (both are optional
-parameters) and use the placeholder "00000000" in place of a date in filenames.
+None of the 2015 input files carry any date/timestamp column (unlike 2009), so
+every generated JSON omits `observed_at`/`sampled_at` and uses the placeholder
+"00000000" in place of a date in filenames.
 
-PTotal2009.dbf carries no coordinates/sample metadata of its own - when enabled, its
-PTotal value is merged (by POINT_ID, as `@p-tot`) into the lab observation JSON that
-is otherwise generated for that point from the other enabled sources; it never creates
-geolocation/sample/observation records by itself.
+Every point has exactly one row in the main csv but (almost always) two spectral
+scans in the country spectra files; the two scans become two separate spectra
+observations distinguished by `subsample`: "a", "b" (and "c", "d", ... in the
+rare case of more than two scans for the same point).
 
-IMPORTANT - nitrogen (N) unit normalisation to weight percent (w%):
-- LUCAS.SOIL_corr.csv: already w%, no conversion.
-- SoilAttr_LUCAS_2012_BG_RO.dbf: mg/100g -> divide by 1000.
-- SoilAttr_ICELAND.dbf: mg/kg -> divide by 10000.
-- SoilAttr_LUCAS_2009_CYP_MLT.dbf: already w%, no conversion.
+Coordinates: revisited points reuse the exact same POINT_ID between the 2009 and
+2015 campaigns, but `observation.geolocation.name` is globally unique in the
+database (unlike `observation.sample.name`, which is only unique per
+sampling_log). So geolocation names are campaign-qualified for 2015
+("{iso}_lucas2015@{point_id}") to avoid colliding with the existing 2009 rows;
+sample names are left unqualified ("{point_id}@0-20"), since reusing them across
+campaigns is safe.
+
+Indicators: 2015 has no CEC (unlike 2009) but does have EC (electrical
+conductivity, not present in 2009) - mapped to the already-staged `@ec`
+indicator. Elevation is site metadata, not a lab indicator, and is not used.
+There is no PTotal data for the 2015 campaign.
+
+process_landscape:
+There is no `manage_landscape` process in the schema. Land cover / land use are
+built instead from the existing `manage_land_cover_observation` /
+`manage_land_use_observation` processes, which key off a genus lookup
+(`landcover_genus_id__landcover_genus_name` / `landuse_genus_id__landuse_genus_name`)
+resolved by name-or-alias - the lower-cased LC1/LU1 code (e.g. "a11", "u111") is
+passed directly, since land_cover_genus.xlsx / land_use_genus.xlsx aliases follow
+that convention (and so do the order/family levels above them, which the DB
+insert process auto-mirrors down into genus-level entries). Neither process takes
+an observation_log or provision, so process_landscape has no observation_log step,
+unlike process_lab/process_spectra - just `land_cover` and `land_use` subfolders.
+A handful of LC1/LU1 codes present in the raw 2015 data (LANDCOVER_SKIP_CODES /
+LANDUSE_SKIP_CODES below) have no matching entry anywhere in the land_cover/
+land_use order/family/genus hierarchy yet; those rows are skipped and reported at
+the end of the run rather than generating JSON that would fail to load. Once the
+missing codes are added to the appropriate xlsx level and the insert_process is
+re-run, remove them from the skip set here and re-run this script.
 
 To run this script:
-- set the INCLUDE_* flags below for the files to process,
 - set the number of RECORDS to test with (0 = all records),
 - execute it with Python 3,
 - ensure the input files are located directly under `CSV_PATH`.
 - The output will be generated under the directory specified by `OUTPUT_ROOT`.
 
 To directly put the output data in the prepared structure, set the `OUTPUT_ROOT` to:
-`../LUCAS_2009`.
+`../LUCAS_2015`.
 """
 
 import sys
 import csv
+import glob
 import json
 import os
-from datetime import datetime
 
 import numpy as np
 
 
-CSV_PATH = "/Users/thomasgumbricht/GitHub_xspatula/LUCAS_TO_JSON/2009"
-OUTPUT_ROOT = "../import_data/LUCAS_2009"
-RECORDS = 0  # max rows to import from each enabled file; 0 = all rows
+CSV_PATH = "/Users/thomasgumbricht/GitHub_xspatula/LUCAS_TO_JSON/2015"
+OUTPUT_ROOT = "../import_data/LUCAS_2015"
+RECORDS = 25  # max rows from the main csv, and max spectra scans in total; 0 = all
 
-MAIN_CSV_FILENAME = "LUCAS.SOIL_corr.csv"
-PTOTAL_FILENAME = "PTotal2009.dbf"
-ICELAND_FILENAME = "SoilAttr_ICELAND.dbf"
-CYP_MLT_FILENAME = "SoilAttr_LUCAS_2009_CYP_MLT.dbf"
-BG_RO_FILENAME = "SoilAttr_LUCAS_2012_BG_RO.dbf"
-
-INCLUDE_MAIN_2009 = True
-INCLUDE_PTOTAL = True
-INCLUDE_ICELAND = True
-INCLUDE_CYP_MLT = True
-INCLUDE_BG_RO = True
+MAIN_CSV_FILENAME = "LUCAS_Topsoil_2015_20200323.csv"
+COORDS_DBF_FILENAME = "LUCAS_Topsoil_2015_20200323.dbf"
+SPECTRA_SUBDIR = "spectra"
+SPECTRA_GLOB = "spectra_*.csv"
+SPECTRA_PREASSEMBLED_FILENAME = "spectra_LUCAS_2015.csv"  # excluded from the glob
 
 CONTACT_NAME = "inherit"
 CONTACT_EMAIL = "inherit"
-CAMPAIGN_NAME = "lucas_eu_2009"
-LAB_PROVISION = "lucas-wetlab-2009"
-SPECTRA_PROVISION = "foss xds rca"
+CAMPAIGN_NAME = "lucas_eu_2015"
+LAB_PROVISION = "lucas-wetlab-2015"
+SPECTRA_PROVISION = "foss xds rca"  # same instrument as 2009, different serial
 LAB_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{SPECTRA_PROVISION}"
 SPECTROMETER_PROVISION_ID = "foss-xds-rca"
-SPECTROMETER_SERIAL = "lucas 2009"
+SPECTROMETER_SERIAL = "lucas 2015"
+WAVELENGTH_UNIT = "nm"
 
-MONTH_ABBR = {
-    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
-    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
-}
+MISSING_DATE_TOKEN = "00000000"
 
-# field name (in the dbf, after stripping whitespace) for each canonical record
-# key. ICELAND's " Long" field also normalises to "Long" once stripped, so it
-# shares a map with CYP_MLT. BG_RO's dbf uses upper-case field names throughout.
-COMPLEMENT_FIELD_MAP_LOWER = {
-    "POINT_ID": "POINT_ID",
-    "iso.country": "NUTS_0",
-    "GPS_LONG": "Long",
-    "GPS_LAT": "Lat",
-    "coarse": "coarse",
-    "clay": "clay",
-    "silt": "silt",
-    "sand": "sand",
-    "pH.in.CaCl2": "pHinCaCl2",
-    "pH.in.H2O": "pHinH2O",
-    "OC": "OC",
-    "CaCO3": "CaCO3",
-    "N": "N",
-    "P": "P",
-    "K": "K",
-    "CEC": "CEC",
-}
-
-COMPLEMENT_FIELD_MAP_BG_RO = {
-    "POINT_ID": "POINT_ID",
-    "iso.country": "NUTS_0",
-    "GPS_LONG": "LONG",
-    "GPS_LAT": "LAT",
-    "coarse": "COARSE",
-    "clay": "CLAY",
-    "silt": "SILT",
-    "sand": "SAND",
-    "pH.in.CaCl2": "PHINCACL2",
-    "pH.in.H2O": "PHINH2O",
-    "OC": "OC",
-    "CaCO3": "CACO3",
-    "N": "N",
-    "P": "P",
-    "K": "K",
-    "CEC": "CEC",
-}
+# LC1/LU1 codes (lowercased) present in the raw 2015 data that have no match at
+# any level (order/family/genus) of the land_cover/land_use hierarchy yet.
+LANDCOVER_SKIP_CODES = {"a30", "h22"}
+LANDUSE_SKIP_CODES = set()
 
 if OUTPUT_ROOT.startswith(".."):
     SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -164,14 +146,14 @@ def write_pilot_txt(dir_path, category, filenames):
 
 
 def to_float(value):
-    """Parse a CSV string or a native dbf number (int/float/Decimal) into a float."""
+    """Parse a CSV string (possibly comma-decimal) or a native dbf number into a float."""
     if isinstance(value, str):
         return float(value.strip().replace(",", "."))
     return float(value)
 
 
 def try_float(value):
-    """Return the float value, or None if missing/unparseable (e.g. 'NA', '<5')."""
+    """Return the float value, or None if missing/unparseable."""
     if value is None or value == "":
         return None
     try:
@@ -188,22 +170,6 @@ def clean_dbf(value):
     return value
 
 
-def surv_date_to_yyyymmdd(value):
-    day = int(value[0:2])
-    month = MONTH_ABBR[value[2:5].upper()]
-    year = int(value[5:9])
-    return f"{year:04d}{month:02d}{day:02d}"
-
-
-def date_to_iso8601(value):
-    return value.strip().replace(" ", "T") + "+00:00"
-
-
-def date_to_yyyymmdd(value):
-    dt = datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S")
-    return dt.strftime("%Y%m%d")
-
-
 # ---------------------------------------------------------------------------
 # step 1 - static sampling_log
 # ---------------------------------------------------------------------------
@@ -216,7 +182,7 @@ def step1_sampling_log():
         "name": CAMPAIGN_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
-        "abstract": "Sampling log for lucas eu 2009",
+        "abstract": "Sampling log for lucas eu 2015",
     }
     sampling_log_filename = f"{CAMPAIGN_NAME}_sampling_log.json"
 
@@ -227,6 +193,7 @@ def step1_sampling_log():
         sampling_log_params,
     )
     write_pilot_txt(sampling_log_dir, "SAMPLING_LOG", [sampling_log_filename])
+
 
 # ---------------------------------------------------------------------------
 # step 2 - static observation log
@@ -279,23 +246,12 @@ def step2_observation_log():
 # step 3 - spectrometer
 # ---------------------------------------------------------------------------
 
-def read_spc_columns(header):
-    """Return [(column_index, wavelength_float), ...] for every spc.* column, in file order."""
-    result = []
-    for i, name in enumerate(header):
-        if name.startswith("spc."):
-            wavelength = float(name[len("spc."):])
-            result.append((i, wavelength))
-    return result
-
-
-def step3_spectrometer(spc_columns):
+def step3_spectrometer(band_wavelengths):
     spectrometer_dir = os.path.join(OUTPUT_ROOT, "process_spectra", "spectrometer")
-    wavelength_array = [w for _, w in spc_columns]
     params = {
         "provision_id__provision_name": SPECTRA_PROVISION,
-        "wavelength_array": wavelength_array,
-        "wavelength_unit_id__wavelength_unit_name": "nm",
+        "wavelength_array": band_wavelengths,
+        "wavelength_unit_id__wavelength_unit_name": WAVELENGTH_UNIT,
         "provision_serial_nr_id__provision_serial_nr_name": SPECTROMETER_SERIAL,
     }
     filename = f"{SPECTROMETER_PROVISION_ID}_{SPECTROMETER_SERIAL}_spectrometer.json"
@@ -312,7 +268,7 @@ def step3_spectrometer(spc_columns):
 # ---------------------------------------------------------------------------
 
 def geolocation_name(iso_country, point_id):
-    return f"{iso_country.strip().lower()}_lucas@{point_id.strip()}"
+    return f"{iso_country.strip().lower()}_lucas2015@{point_id.strip()}"
 
 
 def step4_geolocation(records):
@@ -361,13 +317,8 @@ def step5_sample(records):
         iso_country = record["iso.country"]
         params = {
             "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
-            "tag": point_id.strip(),
+            "tag": point_id,
             "name": sample_name(point_id),
-        }
-        surv_date = record.get("SURV_DATE")
-        if surv_date:
-            params["sampled_at"] = surv_date_to_yyyymmdd(surv_date)
-        params.update({
             "species_id__species_name": "soil",
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             "profile_min": 0,
@@ -375,8 +326,8 @@ def step5_sample(records):
             "juxtaposition_id__juxtaposition_name": "uniform",
             "proximity_id__proximity_name": "general",
             "composition_id__composition_name": "composite",
-        })
-        filename = f"{CAMPAIGN_NAME}_{point_id.strip()}_0_20_sample.json"
+        }
+        filename = f"{CAMPAIGN_NAME}_{point_id}_0_20_sample.json"
         write_process_json(
             os.path.join(sample_dir, "manage_process", filename),
             "manage_geolocated_profile_sample",
@@ -390,12 +341,9 @@ def step5_sample(records):
 # step 6 - process_lab/observation
 # ---------------------------------------------------------------------------
 
-MISSING_DATE_TOKEN = "00000000"
-
-
-def observation_filename(observation_log_name, point_id, obs_date_yyyymmdd):
+def observation_filename(observation_log_name, point_id, subsample, replicate, obs_date_yyyymmdd):
     return (
-        f"{observation_log_name}_{sample_name(point_id)}_a_0_none_"
+        f"{observation_log_name}_{sample_name(point_id)}_{subsample}_{replicate}_none_"
         f"{obs_date_yyyymmdd}_observation.json"
     )
 
@@ -403,17 +351,16 @@ def observation_filename(observation_log_name, point_id, obs_date_yyyymmdd):
 LAB_INDICATOR_COLUMNS = [
     ("coarse", "@cf"),
     ("clay", "@clay"),
-    ("silt", "@silt"),
     ("sand", "@sand"),
-    ("pH.in.CaCl2", "@ph-cacl2"),
-    ("pH.in.H2O", "@ph-h2o"),
+    ("silt", "@silt"),
+    ("pH(CaCl2)", "@ph-cacl2"),
+    ("pH(H2O)", "@ph-h2o"),
     ("OC", "@c-org"),
     ("CaCO3", "@caco3"),
     ("N", "@n-tot"),
     ("P", "@p-ext"),
     ("K", "@k-ext"),
-    ("CEC", "@cec"),
-    ("PTotal", "@p-tot"),
+    ("EC", "@ec"),
 ]
 
 
@@ -422,7 +369,6 @@ def step6_lab_observation(records):
     filenames = []
     for record in records:
         point_id = record["POINT_ID"]
-        date_value = record.get("date")
         params = {
             "observation_log_id__observation_log_name": LAB_OBSERVATION_LOG_NAME,
             "sample_id__sample_name": sample_name(point_id),
@@ -430,16 +376,13 @@ def step6_lab_observation(records):
             "subsample": "a",
             "replicate": 0,
         }
-        if date_value:
-            params["observed_at"] = date_to_iso8601(date_value)
         for column, indicator_key in LAB_INDICATOR_COLUMNS:
             value = record.get(column)
             if value is not None:
                 params[indicator_key] = value
         if not any(k.startswith("@") for k in params):
             continue
-        obs_date_yyyymmdd = date_to_yyyymmdd(date_value) if date_value else MISSING_DATE_TOKEN
-        filename = observation_filename(LAB_OBSERVATION_LOG_NAME, point_id, obs_date_yyyymmdd)
+        filename = observation_filename(LAB_OBSERVATION_LOG_NAME, point_id, "a", 0, MISSING_DATE_TOKEN)
         write_process_json(
             os.path.join(observation_dir, "manage_process", filename),
             "manage_observation",
@@ -453,24 +396,20 @@ def step6_lab_observation(records):
 # step 7 - process_spectra/observation
 # ---------------------------------------------------------------------------
 
-def step7_spectra_observation(rows, idx, spc_columns):
+def step7_spectra_observation(spectra_entries):
     observation_dir = os.path.join(OUTPUT_ROOT, "process_spectra", "observation")
     filenames = []
-    for row in rows:
-        point_id = row[idx["POINT_ID"]]
-        date_value = row[idx["date"]]
+    for point_id, subsample, values in spectra_entries:
         params = {
             "observation_log_id__observation_log_name": SPECTRA_OBSERVATION_LOG_NAME,
             "sample_id__sample_name": sample_name(point_id),
             "provision_id__provision_name": SPECTRA_PROVISION,
-            "subsample": "a",
+            "subsample": subsample,
             "replicate": 0,
-            "observed_at": date_to_iso8601(date_value),
             "provision_serial_nr_id__provision_serial_nr_name": SPECTROMETER_SERIAL,
-            "@diffuse reflectance": (1 / np.exp(np.array(
-                [to_float(row[i]) for i, _ in spc_columns]))).tolist(),
+            "@diffuse reflectance": (1 / np.exp(np.array(values))).tolist(),
         }
-        filename = observation_filename(SPECTRA_OBSERVATION_LOG_NAME, point_id, date_to_yyyymmdd(date_value))
+        filename = observation_filename(SPECTRA_OBSERVATION_LOG_NAME, point_id, subsample, 0, MISSING_DATE_TOKEN)
         write_process_json(
             os.path.join(observation_dir, "manage_process", filename),
             "manage_observation",
@@ -481,7 +420,81 @@ def step7_spectra_observation(rows, idx, spc_columns):
 
 
 # ---------------------------------------------------------------------------
-# step8 - top-level job_LUCAS_2009_*.json files
+# step 8 - process_landscape/land_cover
+# ---------------------------------------------------------------------------
+
+def step8_land_cover(records):
+    land_cover_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "land_cover")
+    filenames = []
+    skipped = {}
+    for record in records:
+        code = record.get("LC1")
+        if not code:
+            continue
+        if code in LANDCOVER_SKIP_CODES:
+            skipped[code] = skipped.get(code, 0) + 1
+            continue
+        point_id = record["POINT_ID"]
+        iso_country = record["iso.country"]
+        params = {
+            "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
+            "landcover_genus_id__landcover_genus_name": code,
+        }
+        filename = f"{CAMPAIGN_NAME}_{point_id}_land_cover.json"
+        write_process_json(
+            os.path.join(land_cover_dir, "manage_process", filename),
+            "manage_land_cover_observation",
+            params,
+        )
+        filenames.append(filename)
+    write_pilot_txt(land_cover_dir, "LAND_COVER", filenames)
+    if skipped:
+        print("  Skipped LC1 codes not yet in the land_cover order/family/genus hierarchy"
+              " (add to land_cover_genus.xlsx and re-run its insert_process):")
+        for code, count in sorted(skipped.items()):
+            print(f"    {code.upper()}: {count} record(s)")
+
+
+# ---------------------------------------------------------------------------
+# step 9 - process_landscape/land_use
+# ---------------------------------------------------------------------------
+
+def step9_land_use(records):
+    land_use_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "land_use")
+    filenames = []
+    skipped = {}
+    for record in records:
+        code = record.get("LU1")
+        if not code:
+            continue
+        if code in LANDUSE_SKIP_CODES:
+            skipped[code] = skipped.get(code, 0) + 1
+            continue
+        point_id = record["POINT_ID"]
+        iso_country = record["iso.country"]
+        params = {
+            "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
+            "landuse_genus_id__landuse_genus_name": code,
+        }
+        filename = f"{CAMPAIGN_NAME}_{point_id}_land_use.json"
+        write_process_json(
+            os.path.join(land_use_dir, "manage_process", filename),
+            "manage_land_use_observation",
+            params,
+        )
+        filenames.append(filename)
+    write_pilot_txt(land_use_dir, "LAND_USE", filenames)
+    if skipped:
+        print("  Skipped LU1 codes not yet in the land_use order/family/genus hierarchy"
+              " (add to land_use_genus.xlsx and re-run its insert_process):")
+        for code, count in sorted(skipped.items()):
+            print(f"    {code.upper()}: {count} record(s)")
+
+
+# ---------------------------------------------------------------------------
+# step 10 - top-level job_LUCAS_2015_*.json files
 # ---------------------------------------------------------------------------
 
 # (job suffix, dir relative to OUTPUT_ROOT, pilot file name)
@@ -494,13 +507,15 @@ JOB_FILE_SPECS = [
     ("sample", "process_lab/sample", "xspatula_add_sample_pilot.txt"),
     ("sampling_log", "process_lab/sampling_log", "xspatula_add_sampling_log_pilot.txt"),
     ("spectrometer", "process_spectra/spectrometer", "xspatula_add_spectrometer_pilot.txt"),
+    ("land_cover", "process_landscape/land_cover", "xspatula_add_land_cover_pilot.txt"),
+    ("land_use", "process_landscape/land_use", "xspatula_add_land_use_pilot.txt"),
 ]
 
 
-def step8_job_files():
+def step10_job_files():
     for suffix, sub_path, pilot_file in JOB_FILE_SPECS:
-        job_folder = f"import_data/LUCAS_2009/{sub_path}"
-        filename = f"job_LUCAS_2009_{suffix}.json"
+        job_folder = f"import_data/LUCAS_2015/{sub_path}"
+        filename = f"job_LUCAS_2015_{suffix}.json"
         write_job_json(
             os.path.join(OUTPUT_ROOT, filename),
             job_folder,
@@ -510,11 +525,11 @@ def step8_job_files():
 
 
 # ---------------------------------------------------------------------------
-# record loading - normalises every enabled source into a common record shape
+# record loading
 # ---------------------------------------------------------------------------
 
 def load_main_csv(path):
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8", errors="replace") as f:
         reader = csv.reader(f)
         header = next(reader)
         rows = list(reader)
@@ -522,102 +537,94 @@ def load_main_csv(path):
     return header, idx, rows
 
 
-def main_csv_records(rows, idx, limit=0):
+def load_coords(path):
+    from dbfread import DBF
+
+    coords = {}
+    for rec in DBF(path, load=False, encoding="latin1"):
+        rec = {k.strip(): v for k, v in rec.items()}
+        point_id = str(clean_dbf(rec.get("Point_ID"))).strip()
+        long_ = try_float(rec.get("Long"))
+        lat_ = try_float(rec.get("Lat"))
+        if long_ is not None and lat_ is not None:
+            coords[point_id] = (long_, lat_)
+    return coords
+
+
+def main_csv_records(rows, idx, coords, limit=0):
     records = []
+    n_no_coords = 0
     for row in rows:
+        point_id = row[idx["Point_ID"]].strip()
+        coord = coords.get(point_id)
+        if coord is None:
+            n_no_coords += 1
+            continue
         record = {
-            "POINT_ID": row[idx["POINT_ID"]],
-            "iso.country": row[idx["iso.country"]],
-            "SURV_DATE": row[idx["SURV_DATE"]],
-            "date": row[idx["date"]],
-            "GPS_LONG": to_float(row[idx["GPS_LONG"]]),
-            "GPS_LAT": to_float(row[idx["GPS_LAT"]]),
+            "POINT_ID": point_id,
+            "iso.country": row[idx["NUTS_0"]],
+            "GPS_LONG": coord[0],
+            "GPS_LAT": coord[1],
+            "LC1": row[idx["LC1"]].strip().lower(),
+            "LU1": row[idx["LU1"]].strip().lower(),
         }
         for column, _ in LAB_INDICATOR_COLUMNS:
-            if column == "PTotal":
-                continue
             record[column] = try_float(row[idx[column]])
         records.append(record)
         if limit and len(records) >= limit:
             break
+    if n_no_coords:
+        print(f"  NOTE: {n_no_coords} row(s) skipped (no coordinate match in {COORDS_DBF_FILENAME})")
     return records
 
 
-def load_dbf_records(path, field_map, n_divisor=None, limit=0):
-    from dbfread import DBF
+def load_spectra(spectra_dir, limit=0):
+    paths = sorted(glob.glob(os.path.join(spectra_dir, SPECTRA_GLOB)))
+    paths = [p for p in paths if os.path.basename(p) != SPECTRA_PREASSEMBLED_FILENAME]
 
-    records = []
-    for rec in DBF(path, load=False, encoding="latin1"):
-        rec = {k.strip(): v for k, v in rec.items()}
-        record = {
-            "POINT_ID": str(clean_dbf(rec.get(field_map["POINT_ID"]))).strip(),
-            "iso.country": clean_dbf(rec.get(field_map["iso.country"])),
-            "GPS_LONG": to_float(rec.get(field_map["GPS_LONG"])),
-            "GPS_LAT": to_float(rec.get(field_map["GPS_LAT"])),
-        }
-        for key in ("coarse", "clay", "silt", "sand", "pH.in.CaCl2", "pH.in.H2O", "OC", "CaCO3", "P", "K", "CEC"):
-            record[key] = try_float(rec.get(field_map[key]))
-        n_value = try_float(rec.get(field_map["N"]))
-        if n_value is not None and n_divisor:
-            n_value = n_value / n_divisor
-        record["N"] = n_value
-        records.append(record)
-        if limit and len(records) >= limit:
-            break
-    return records
+    band_wavelengths = None
+    entries = []
+    scan_counts = {}
 
+    for path in paths:
+        with open(path, newline="", encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            pid_i = header.index("PointID")
+            first_band_idx = header.index("400")
+            this_bands = [float(h) for h in header[first_band_idx:]]
+            if band_wavelengths is None:
+                band_wavelengths = this_bands
+            elif this_bands != band_wavelengths:
+                raise ValueError(f"Band columns in {path} do not match previously seen bands")
 
-def load_ptotal(path, limit=0):
-    from dbfread import DBF
-
-    ptotal = {}
-    count = 0
-    for rec in DBF(path, load=False, encoding="latin1"):
-        rec = {k.strip(): v for k, v in rec.items()}
-        point_id = str(clean_dbf(rec.get("POINT_ID"))).strip()
-        ptotal[point_id] = try_float(rec.get("PTotal"))
-        count += 1
-        if limit and count >= limit:
-            break
-    return ptotal
+            for row in reader:
+                point_id = row[pid_i].strip()
+                n = scan_counts.get(point_id, 0)
+                scan_counts[point_id] = n + 1
+                subsample = chr(ord("a") + n)
+                values = [float(v) for v in row[first_band_idx:]]
+                entries.append((point_id, subsample, values))
+                if limit and len(entries) >= limit:
+                    return band_wavelengths, entries
+    return band_wavelengths, entries
 
 
 def load_all_records():
-    """Assemble the normalised record list (steps 4-6) and, if enabled, the main
-    CSV header/rows/spc_columns (steps 3 & 7). Raises on missing/unreadable files."""
-    header = idx = rows = None
-    spc_columns = []
-    all_records = []
+    header, idx, rows = load_main_csv(os.path.join(CSV_PATH, MAIN_CSV_FILENAME))
+    coords = load_coords(os.path.join(CSV_PATH, COORDS_DBF_FILENAME))
+    records = main_csv_records(rows, idx, coords, limit=RECORDS)
 
-    if INCLUDE_MAIN_2009:
-        main_path = os.path.join(CSV_PATH, MAIN_CSV_FILENAME)
-        header, idx, rows = load_main_csv(main_path)
-        spc_columns = read_spc_columns(header)
-        record_rows = rows if RECORDS == 0 else rows[:RECORDS]
-        all_records.extend(main_csv_records(record_rows, idx, limit=RECORDS))
+    band_wavelengths, spectra_entries = load_spectra(os.path.join(CSV_PATH, SPECTRA_SUBDIR), limit=RECORDS)
 
-    if INCLUDE_ICELAND:
-        path = os.path.join(CSV_PATH, ICELAND_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_divisor=10000, limit=RECORDS))
+    valid_point_ids = {r["POINT_ID"] for r in records}
+    n_before = len(spectra_entries)
+    spectra_entries = [e for e in spectra_entries if e[0] in valid_point_ids]
+    n_dropped = n_before - len(spectra_entries)
+    if n_dropped:
+        print(f"  NOTE: {n_dropped} spectra scan(s) dropped (point has no matching lab/coordinate record)")
 
-    if INCLUDE_CYP_MLT:
-        path = os.path.join(CSV_PATH, CYP_MLT_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_divisor=None, limit=RECORDS))
-
-    if INCLUDE_BG_RO:
-        path = os.path.join(CSV_PATH, BG_RO_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_BG_RO, n_divisor=1000, limit=RECORDS))
-
-    if INCLUDE_PTOTAL:
-        path = os.path.join(CSV_PATH, PTOTAL_FILENAME)
-        ptotal = load_ptotal(path, limit=RECORDS)
-        for record in all_records:
-            value = ptotal.get(record["POINT_ID"])
-            if value is not None:
-                record["PTotal"] = value
-
-    record_rows_for_spectra = rows if RECORDS == 0 else (rows[:RECORDS] if rows is not None else None)
-    return header, idx, record_rows_for_spectra, spc_columns, all_records
+    return records, band_wavelengths, spectra_entries
 
 
 # ---------------------------------------------------------------------------
@@ -626,7 +633,7 @@ def load_all_records():
 
 def main():
     try:
-        _header, idx, record_rows, spc_columns, all_records = load_all_records()
+        records, band_wavelengths, spectra_entries = load_all_records()
     except FileNotFoundError as e:
         print(f"ERROR: input file not found: {e.filename}")
         print("DONE with errors: nothing was generated.")
@@ -641,14 +648,15 @@ def main():
     steps = [
         ("step1 - campaign & sampling_log", step1_sampling_log, ()),
         ("step2 - observation_log", step2_observation_log, ()),
-        ("step4 - geolocation", step4_geolocation, (all_records,)),
-        ("step5 - sample", step5_sample, (all_records,)),
-        ("step6 - process_lab/observation", step6_lab_observation, (all_records,)),
-        ("step8 - job_LUCAS_2009_*.json files", step8_job_files, ()),
+        ("step3 - spectrometer", step3_spectrometer, (band_wavelengths,)),
+        ("step4 - geolocation", step4_geolocation, (records,)),
+        ("step5 - sample", step5_sample, (records,)),
+        ("step6 - process_lab/observation", step6_lab_observation, (records,)),
+        ("step7 - process_spectra/observation", step7_spectra_observation, (spectra_entries,)),
+        ("step8 - process_landscape/land_cover", step8_land_cover, (records,)),
+        ("step9 - process_landscape/land_use", step9_land_use, (records,)),
+        ("step10 - job_LUCAS_2015_*.json files", step10_job_files, ()),
     ]
-    if INCLUDE_MAIN_2009:
-        steps.insert(2, ("step3 - spectrometer", step3_spectrometer, (spc_columns,)))
-        steps.insert(6, ("step7 - process_spectra/observation", step7_spectra_observation, (record_rows, idx, spc_columns)))
 
     failures = []
     for label, func, args in steps:
