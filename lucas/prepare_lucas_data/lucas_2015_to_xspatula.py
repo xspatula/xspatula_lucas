@@ -62,6 +62,20 @@ parameter at all. These fields are generated anyway, in anticipation of a planne
 schema update; until that lands, loading process_landscape/observation_log and the
 land_cover/land_use records that reference it will fail.
 
+process_biogeo:
+BIOGEO16 (one of 8 EU biogeographic regions, e.g. "Mediterranean", "Boreal") is
+joined from LUCAS-Master-Grid.csv by POINT_ID, onto whichever 2015 points already
+have a lab/coordinate record; points with no match (or a literal "NA"/"Outside"
+value in the grid) are skipped and counted in a summary note. `manage_landscape`
+does not exist as a process at all yet (same schema gap as process_landscape,
+generated anyway per instruction), and unlike process_landscape there is also no
+sampling_log for the "biogeo16_eu_2020" campaign this data nominally belongs to -
+process_biogeo only ever writes observation_log + observation, both left for a
+future schema/setup pass to make loadable. The observed date is fixed at
+"2020-05-01" (the Master-Grid dataset's own vintage, unrelated to the LUCAS 2015
+survey window) for every record, as literal text (not padded to a timestamp),
+matching how it's specified in CLAUDE.md.
+
 To run this script:
 - set the number of RECORDS to test with (0 = all records),
 - execute it with Python 3,
@@ -90,6 +104,7 @@ COORDS_DBF_FILENAME = "LUCAS_Topsoil_2015_20200323.dbf"
 SPECTRA_SUBDIR = "spectra"
 SPECTRA_GLOB = "spectra_*.csv"
 SPECTRA_PREASSEMBLED_FILENAME = "spectra_LUCAS_2015.csv"  # excluded from the glob
+MASTER_GRID_FILENAME = "LUCAS-Master-Grid.csv"
 
 CONTACT_NAME = "inherit"
 CONTACT_EMAIL = "inherit"
@@ -97,12 +112,19 @@ CAMPAIGN_NAME = "lucas_eu_2015"
 LAB_PROVISION = "lucas-wetlab-2015"
 SPECTRA_PROVISION = "foss xds rca"  # same instrument as 2009, different serial
 LANDSCAPE_PROVISION = "landscape"
+BIOGEO_CAMPAIGN_NAME = "biogeo16_eu_2020"
+BIOGEO_PROVISION = "biogeo16"
 LAB_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{SPECTRA_PROVISION}"
 LANDSCAPE_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LANDSCAPE_PROVISION}"
+BIOGEO_OBSERVATION_LOG_NAME = f"{BIOGEO_CAMPAIGN_NAME}@{BIOGEO_PROVISION}"
 SPECTROMETER_PROVISION_ID = "foss-xds-rca"
 SPECTROMETER_SERIAL = "lucas 2015"
 WAVELENGTH_UNIT = "nm"
+
+BIOGEO_OBSERVED_AT = "2020-05-01"  # fixed date, literal text per CLAUDE.md, not a full timestamp
+BIOGEO_DATE_TOKEN = "20200501"     # same date, filename-safe (no dashes)
+BIOGEO_MISSING_VALUES = {"", "NA", "Outside"}
 
 # LUCAS 2015 fieldwork ran May-October 2015; no per-point date is available, so
 # this representative date (survey midpoint) stands in for observed_at/sampled_at
@@ -508,7 +530,59 @@ def step9_land_use(records):
 
 
 # ---------------------------------------------------------------------------
-# step 10 - top-level job_LUCAS_2015_*.json files
+# step 10 - process_biogeo/observation_log
+# ---------------------------------------------------------------------------
+
+def step10_biogeo_observation_log():
+    biogeo_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "observation_log")
+    params = {
+        "sampling_log_id__sampling_log_name": BIOGEO_CAMPAIGN_NAME,
+        "provision_id__provision_name": BIOGEO_PROVISION,
+        "name": BIOGEO_OBSERVATION_LOG_NAME,
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
+        "satellite": 1,
+    }
+    filename = f"{BIOGEO_OBSERVATION_LOG_NAME}_observation_log.json"
+    write_process_json(
+        os.path.join(biogeo_dir, "manage_process", filename),
+        "manage_observation_log",
+        params,
+    )
+    write_pilot_txt(biogeo_dir, "OBSERVATION_LOG", [filename])
+
+
+# ---------------------------------------------------------------------------
+# step 11 - process_biogeo/observation
+# ---------------------------------------------------------------------------
+
+def step11_biogeo_observation(records):
+    observation_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "observation")
+    filenames = []
+    for record in records:
+        value = record.get("BIOGEO16")
+        if value is None:
+            continue
+        point_id = record["POINT_ID"]
+        params = {
+            "observation_log_id__observation_log_name": BIOGEO_OBSERVATION_LOG_NAME,
+            "sample_id__sample_name": sample_name(point_id),
+            "provision_id__provision_name": BIOGEO_PROVISION,
+            "observed_at": BIOGEO_OBSERVED_AT,
+            "@biogeo16": value,
+        }
+        filename = observation_filename(BIOGEO_OBSERVATION_LOG_NAME, point_id, "a", 0, BIOGEO_DATE_TOKEN)
+        write_process_json(
+            os.path.join(observation_dir, "manage_process", filename),
+            "manage_landscape",
+            params,
+        )
+        filenames.append(filename)
+    write_pilot_txt(observation_dir, "OBSERVATION", filenames)
+
+
+# ---------------------------------------------------------------------------
+# step 12 - top-level job_LUCAS_2015_*.json files
 # ---------------------------------------------------------------------------
 
 # (job suffix, dir relative to OUTPUT_ROOT, pilot file name)
@@ -524,10 +598,12 @@ JOB_FILE_SPECS = [
     ("spectrometer", "process_spectra/spectrometer", "xspatula_add_spectrometer_pilot.txt"),
     ("land_cover", "process_landscape/land_cover", "xspatula_add_land_cover_pilot.txt"),
     ("land_use", "process_landscape/land_use", "xspatula_add_land_use_pilot.txt"),
+    ("observation_log_biogeo", "process_biogeo/observation_log", "xspatula_add_observation_log_pilot.txt"),
+    ("observation_biogeo", "process_biogeo/observation", "xspatula_add_observation_pilot.txt"),
 ]
 
 
-def step10_job_files():
+def step12_job_files():
     for suffix, sub_path, pilot_file in JOB_FILE_SPECS:
         job_folder = f"import_data/LUCAS_2015/{sub_path}"
         filename = f"job_LUCAS_2015_{suffix}.json"
@@ -625,10 +701,36 @@ def load_spectra(spectra_dir, limit=0):
     return band_wavelengths, entries
 
 
+def load_biogeo(path):
+    biogeo = {}
+    with open(path, newline="", encoding="utf-8", errors="replace") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        idx = {name: i for i, name in enumerate(header)}
+        pid_i = idx["POINT_ID"]
+        bg_i = idx["BIOGEO16"]
+        for row in reader:
+            value = row[bg_i].strip()
+            if value in BIOGEO_MISSING_VALUES:
+                continue
+            biogeo[row[pid_i].strip()] = value
+    return biogeo
+
+
 def load_all_records():
     _header, idx, rows = load_main_csv(os.path.join(CSV_PATH, MAIN_CSV_FILENAME))
     coords = load_coords(os.path.join(CSV_PATH, COORDS_DBF_FILENAME))
     records = main_csv_records(rows, idx, coords, limit=RECORDS)
+
+    biogeo = load_biogeo(os.path.join(CSV_PATH, MASTER_GRID_FILENAME))
+    n_no_biogeo = 0
+    for record in records:
+        value = biogeo.get(record["POINT_ID"])
+        record["BIOGEO16"] = value
+        if value is None:
+            n_no_biogeo += 1
+    if n_no_biogeo:
+        print(f"  NOTE: {n_no_biogeo} record(s) have no BIOGEO16 match in {MASTER_GRID_FILENAME}")
 
     band_wavelengths, spectra_entries = load_spectra(os.path.join(CSV_PATH, SPECTRA_SUBDIR), limit=RECORDS)
 
@@ -670,7 +772,9 @@ def main():
         ("step7 - process_spectra/observation", step7_spectra_observation, (spectra_entries,)),
         ("step8 - process_landscape/land_cover", step8_land_cover, (records,)),
         ("step9 - process_landscape/land_use", step9_land_use, (records,)),
-        ("step10 - job_LUCAS_2015_*.json files", step10_job_files, ()),
+        ("step10 - process_biogeo/observation_log", step10_biogeo_observation_log, ()),
+        ("step11 - process_biogeo/observation", step11_biogeo_observation, (records,)),
+        ("step12 - job_LUCAS_2015_*.json files", step12_job_files, ()),
     ]
 
     failures = []

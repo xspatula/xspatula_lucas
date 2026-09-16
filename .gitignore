@@ -83,11 +83,14 @@ lucas/import_data/utility/observation/insert_process/staging
 # =============================================================
 lucas/import_data/LUCAS_2009/
 lucas/import_data/LUCAS_2009
+lucas/import_data/LUCAS_2015/
+lucas/import_data/LUCAS_2015
 
 # =============================================================
 # LUCAS separate projects data
 # =============================================================
 lucas/project_lucas_2009/data/
+lucas/project_lucas_2015/data/
 
 # =============================================================
 # Files created at run time
