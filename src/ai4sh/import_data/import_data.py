@@ -22,6 +22,8 @@ from src.postgres import Get_schema_table
 
 from src.postgres.pg_ai4sh import PG_manage_AI4SH
 
+from src.ai4sh.import_data.nominal_classification import CLASSIFIER_FUNCTIONS, CLASSIFIER_INDICATOR_NAMES
+
 # Column names whose values must never be forced to lowercase during import.
 # Add entries here to extend the exclusion list.
 NO_LOWER_COLS = frozenset({
@@ -802,9 +804,13 @@ class Process_import_JSON(Get_schema_table):
                 return None
             
             self._Insert_at_records(updated_query_D,at_params_D, schema, table, main_query_D['provision_id__provision_name'])
-    
+
+            if schema_table == 'observation.observation_measurement':
+
+                self._Insert_derived_classifications(main_query_D, updated_query_D, at_columns_D)
+
             return None
-        
+
         # Quick and dirty for method tier
 
         if table == 'observation_log_method_tier':
@@ -835,6 +841,61 @@ class Process_import_JSON(Get_schema_table):
         elif self.verbose > 1:
 
             print ('.     🟡 Record %s already registered in table %s, use overwrite to update' %(name, table))
+
+    def _Insert_derived_classifications(self, main_query_D, updated_query_D, at_columns_D):
+        ''' Compute and store any derived nominal classification (e.g. soil texture -
+        see src/ai4sh/import_data/nominal_classification.py) whose indicator is
+        registered as a provision_indicator (quantity 'class') for this observation's
+        provision. Called once per manage_observation insert, right after its regular
+        @-indicator measurements are written.
+        '''
+
+        provision_name = main_query_D['provision_id__provision_name']
+
+        registered_D = self.pg_ai4sh_C._Retrieve_classification_indicators_for_provision(provision_name, self.pg_session_C)
+
+        if not registered_D or not (set(registered_D) & CLASSIFIER_INDICATOR_NAMES):
+
+            return None
+
+        observation_id = updated_query_D['observation_id']
+
+        for classifier_fn in CLASSIFIER_FUNCTIONS:
+
+            result_D = classifier_fn(at_columns_D)
+
+            for indicator_name, class_name in result_D.items():
+
+                if indicator_name not in registered_D:
+
+                    continue
+
+                indicator_id, analysis_method_id = registered_D[indicator_name]
+
+                value_id = self.pg_ai4sh_C._Retrieve_nominal_classification_id(
+                    indicator_id, analysis_method_id, class_name, self.pg_session_C)
+
+                if value_id is None:
+
+                    self._Report_failure(
+                        '.  ❌ ERROR: derived class "%s" for indicator "%s" is not a registered '
+                        'nominal_classification row (provision %s) - add it to nominal_classes.xlsx '
+                        'and re-run the insert_process' % (class_name, indicator_name, provision_name))
+
+                    continue
+
+                classification_query_D = {
+                    'observation_id': observation_id,
+                    'indicator_id': indicator_id,
+                    'value_id': value_id,
+                }
+
+                self._Manage_specifics(
+                    main_query_D, classification_query_D, 'observation_id',
+                    'observation', 'observation_classification', observation_id,
+                    '%s@%s' % (indicator_name, provision_name))
+
+        return None
 
     def _Insert_at_records(self,updated_query_D,at_params_D, schema, table, provision_name):
 

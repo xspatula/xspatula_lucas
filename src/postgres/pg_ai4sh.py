@@ -19,6 +19,13 @@ class PG_manage_AI4SH:
         # Cache of (src_unit_name, dst_unit_name) -> unit_translate row, resolved lazily
         self._unit_translation_cache = {}
 
+        # Cache of provision_name -> {indicator_name_or_alias: (indicator_id, analysis_method_id)},
+        # for quantity 'class' (nominal classification) indicators, resolved lazily
+        self._classification_indicator_cache = {}
+
+        # Cache of (indicator_id, analysis_method_id) -> {class_name: nominal_classification_id}, resolved lazily
+        self._nominal_classification_cache = {}
+
     #===== Custom project specific postgres functions =====
     def _Custom_function_SKIPPA(self, query_D):
         '''
@@ -234,7 +241,72 @@ class PG_manage_AI4SH:
             msg = '⚠️ Not all expected measured indicators are found. Expected: %s, found: %s' %(len(recs), len(return_D))
         
         return return_D
-    
+
+    def _Retrieve_classification_indicators_for_provision(self, provision_name, pg_session_C):
+        '''Which quantity='class' (nominal classification) indicators are registered,
+        via provision_indicator, for the given provision. Returns
+        {indicator_name: (indicator_id, analysis_method_id)}, cached per provision_name.
+        Used to gate derived nominal classifications (see nominal_classification.py):
+        a classifier's result is only stored if its indicator name shows up here.
+        '''
+
+        if provision_name in self._classification_indicator_cache:
+
+            return self._classification_indicator_cache[provision_name]
+
+        resolved = self._Retrieve_name_from_name_alias(
+            {'schema_table': 'observation_utility.provision', 'name': provision_name},
+            pg_session_C
+        )
+
+        if not resolved:
+
+            self._classification_indicator_cache[provision_name] = {}
+
+            return {}
+
+        sql = "SELECT OUI.name, OUI.alias, OUI.id, OUPI.analysis_method_id \
+            FROM observation_utility.provision AS OUP \
+            INNER JOIN observation_utility.provision_indicator AS OUPI ON OUPI.provision_id = OUP.id \
+            INNER JOIN observation_utility.indicator AS OUI ON OUI.id = OUPI.indicator_id \
+            INNER JOIN observation_utility.quantity AS OUQ ON OUQ.id = OUI.quantity_id \
+            WHERE OUP.name = '%s' AND OUQ.name = 'class';" % resolved
+
+        recs = pg_session_C._Execute_search_all_sql(sql)
+
+        indicator_D = {}
+
+        for name, alias, indicator_id, analysis_method_id in (recs or []):
+
+            indicator_D[name] = (indicator_id, analysis_method_id)
+            indicator_D[alias] = (indicator_id, analysis_method_id)
+
+        self._classification_indicator_cache[provision_name] = indicator_D
+
+        return indicator_D
+
+    def _Retrieve_nominal_classification_id(self, indicator_id, analysis_method_id, class_name, pg_session_C):
+        '''observation_utility.nominal_classification.id for (indicator_id,
+        analysis_method_id, name=class_name) - the value_id to store in
+        observation.observation_classification. Caches the full class-name map per
+        (indicator_id, analysis_method_id) pair on first use. Returns None if the
+        class name isn't a registered nominal_classification row (i.e. the Python
+        classifier and the database's registered class list have drifted apart).
+        '''
+
+        cache_key = (indicator_id, analysis_method_id)
+
+        if cache_key not in self._nominal_classification_cache:
+
+            sql = "SELECT name, id FROM observation_utility.nominal_classification \
+                WHERE indicator_id = %d AND analysis_method_id = %d;" % cache_key
+
+            recs = pg_session_C._Execute_search_all_sql(sql)
+
+            self._nominal_classification_cache[cache_key] = {name: id_ for name, id_ in (recs or [])}
+
+        return self._nominal_classification_cache[cache_key].get(class_name)
+
     def _Retrieve_wavelength_cardinality_from_provision(self, provision_name, pg_session_C):
 
         resolved = self._Retrieve_name_from_name_alias(
