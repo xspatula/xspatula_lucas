@@ -1,0 +1,13 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_biogeo16",
+        "tabular_data_path": "import_data/utility/landscape/excel/biogeo16.xlsx",
+        "dst_path": "import_data/utility/landscape/insert_process/staging"
+      }
+    }
+  ]
+}
