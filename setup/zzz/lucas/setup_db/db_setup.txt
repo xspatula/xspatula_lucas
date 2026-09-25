@@ -114,9 +114,6 @@ observation_utility/macrofauna_v10_sql.json
 # Inserted with id = 0 for unknown/undisclosed method tier.
 observation_utility/method_tier_v10_sql.json
 
-# Micobiometer kit version (microbiometer is citizen scientist tool for soil microbiota).
-observation_utility/microbiometer_version_v10_sql.json
-
 # Monolith extraction method (e.g. block of soil, sediment or ice-core).
 # Inserted with id = 0 for unknown/undisclosed method.
 observation_utility/monolith_extraction_v10_sql.json
@@ -163,12 +160,6 @@ observation_utility/spectroscopy_method_v10_sql.json
 # Storage method for acquired samples before analysis.
 # Inserted with id = 0 for no relevance.
 observation_utility/storage_v10_sql.json
-
-# Taxa levels in the Linnean classification system.
-observation_utility/taxa_level_v10_sql.json
-
-# Taxa status to handle outdated and redundant taxa definitions.
-observation_utility/taxa_status_v10_sql.json
 
 # transportation method/conditions for acquired samples before analysis (e.g. cold, frozen).
 # Inserted with id = 0 for no relevance.
@@ -218,17 +209,48 @@ observation_utility/spectrometer_v10_sql.json
 # requires: quantity, species, unit.
 observation_utility/quantity_default_unit_v10_sql.json
 
-# Taxa defines arbitrary taxa with its Linnean classification level
-# requires: taxa_level, taxa_status
-observation_utility/taxa_v10_sql.json
-
-# Taxa function defines ecosystem functions related to a taxa
-# requires: taxa_level, taxa_status.
-observation_utility/taxa_function_v10_sql.json
+# Nominal classification that can be derived from numerical observations
+# requires: indicator and analysis method
+observation_utility/nominal_classification_v10_sql.json
 
 # Unit translate defines the mathematical translation between different units
 # requires: unit.
 observation_utility/unit_translate_v10_sql.json
+
+#==========================#
+#==== Organism utility ====#
+#==========================#
+
+# Taxon rank in the Linnean classification system, default ranks are set directly at setup.
+organism_utility/taxon_rank_v10_sql.json
+
+# Taxon function defines different (ecosystem) functions that are typical for distinct taxa
+organism_utility/taxon_function_v10_sql.json
+
+# Taxon defines arbitrary taxon with its Linnean classification level
+# requires: taxon_rank, parent taxon
+organism_utility/taxon_v10_sql.json
+
+# Taxon status to handle outdated and redundant taxon definitions.
+# requires: taxon
+### REMOVE to RUN ###organism_utility/taxon_status_v10_sql.json
+
+# Taxon parity to handle redundant outdated or double taxon definitions.
+# requires: taxon
+organism_utility/taxon_parity_v10_sql.json
+
+#==============================#
+#==== Organism observation ====#
+#==============================#
+
+# Taxon observation
+# requires: observation_log, indicator, taxon
+organism/observation_measurement_taxon_v10_sql.json
+
+#======================#
+#==== eDNA utility ====#
+#======================#
+
 
 # eDNA utility (software, sequence_library, nucleotide_archive, extraction,
 # amplification, purification, sequencing, metabarcoding_pipeline, bioinformatics).
@@ -296,6 +318,7 @@ observation/observation_log_v10_sql.json
 observation/observation_v10_sql.json
 
 
+
 # Infiltration BeerKan is an extension of observation.
 # The extension consists of 2 tables:
 # -infiltration_beerkan,
@@ -359,6 +382,10 @@ landscape_utility/land_use_v10_sql.json
 # -land cover genus
 landscape_utility/land_cover_v10_sql.json
 
+# biogeo16 utility includes tables for:
+# -biogeo16 classes
+landscape_utility/biogeo16_v10_sql.json
+
 # Soil classification utility includes tables for:
 # -soil texture (USDA)
 # -soil texture (ISSS)
@@ -398,3 +425,8 @@ landscape_utility/soil_preparation_v10_sql.json
 # - landuse observation
 # - landcover observation
 landscape/observation_lucc_v10_sql.json
+
+# observation_biogeo16 contains tables for:
+# - landuse observation
+# - landcover observation
+landscape/observation_biogeo16_v10_sql.json

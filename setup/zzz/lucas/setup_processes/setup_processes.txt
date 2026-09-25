@@ -62,6 +62,8 @@ observation_utility/provider_v10_sql.json
 
 observation_utility/provision_indicator_v10_sql.json
 
+observation_utility/nominal_classification_v10_sql.json
+
 observation_utility/provision_serial_nr_v10_sql.json
 
 observation_utility/provision_v10_sql.json
@@ -85,6 +87,10 @@ observation_utility/transportation_v10_sql.json
 observation_utility/unit_translate_v10_sql.json
 
 observation_utility/unit_v10_sql.json
+
+### OBSERVATION UTILITIES ORGANISMS ###
+
+organism_utility/taxon_v10_sql.json
 
 ### OBSERVATION UTILITIES eDNA ###
 
@@ -138,6 +144,8 @@ landscape_utility/land_use_v10_sql.json
 
 landscape_utility/land_cover_v10_sql.json
 
+landscape_utility/biogeo16_v10_sql.json
+
 landscape_utility/soil_classification_v10_sql.json
 
 landscape_utility/major_landform_v10_sql.json
@@ -157,6 +165,8 @@ landscape_utility/soil_preparation_v10_sql.json
 #landscape/cultivation_soil_preparation_v10_sql.json
 
 landscape/observation_lucc_v10_sql.json
+
+landscape/observation_biogeo16_v10_sql.json
 
 ### SELECT SPECTRA ###
 
