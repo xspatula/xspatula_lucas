@@ -96,3 +96,22 @@ lucas/project_lucas_2015/data/
 # Files created at run time
 # =============================================================
 setup/zzz/lucas/setup_db/db_audit.txt
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_community_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_landscape_utility_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_landscape_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_observation_utility_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_observation_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_organism_utility_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_organism_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_process_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_utility_v10_sql.json
+
+
+
+# =============================================================
+# Side development of orgnaisms and eDNA
+# =============================================================
+lucas/import_data/eDNA/
+setup/zzz/lucas/setup_db/json/organism/
+setup/zzz/lucas/setup_db/json/organism_utility/
+setup/zzz/lucas/setup_processes/json/organism_utlity/
