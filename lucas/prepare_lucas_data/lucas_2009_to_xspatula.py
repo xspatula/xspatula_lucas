@@ -28,20 +28,22 @@ process_landscape / process_biogeo: LC1/LU1 (land cover/use) and BIOGEO16 (one o
 EU biogeographic regions, from LUCAS-Master-Grid.csv, joined by POINT_ID) are only
 generated for LUCAS.SOIL_corr.csv-sourced records - the SoilAttr_*.dbf complements
 carry neither column, so those points are silently skipped by these two process
-groups. LC1/LU1 use `manage_land_cover_observation`/`manage_land_use_observation`
-(there is no `manage_landscape` process in the schema), keyed by a genus lookup
+groups. LC1/LU1 use `manage_land_cover_observation`/`manage_land_use_observation`, 
+keyed by a genus lookup
 resolved by name-or-alias - the lower-cased LC1/LU1 code (e.g. "a11", "u111") is
 passed directly. A handful of 2009 LC1 codes (LANDCOVER_SKIP_CODES below) have no
 match anywhere in the land_cover order/family/genus hierarchy yet and are skipped
-and reported; LU1 is fully covered. Unlike LC1/LU1 (which get each record's real
-survey date), BIOGEO16 uses a fixed "2020-05-01" (the grid's own vintage) and the
-shared "biogeo16_eu_2020"/"biogeo16" observation_log - identical to the one the
-2015 script generates, since it's the same global dataset, not campaign-specific.
-`manage_observation_log` has no `in-situ` parameter and `manage_land_cover_observation`/
-`manage_land_use_observation` have no `observation_log_id__observation_log_name`/
-`provision_id__provision_name` parameter, and `manage_landscape` (used for biogeo)
-doesn't exist at all - these are generated anyway, in anticipation of a planned
-schema update, matching lucas_2015_to_xspatula.py.
+and reported; LU1 is fully covered.
+
+BIOGEO16 belongs to its own registered campaign/dataset ("biogeo16", an EEA
+compilation, begun 2016-03-31 - see lucas/import_data/dataset_meta/excel/campaign.xlsx
+and lucas/import_data/utility/observation/excel/provision.xlsx's "compilation" row),
+not to the LUCAS 2009/2015 campaigns, so it gets its own sampling_log (step1b) -
+identical in both this script and lucas_2015_to_xspatula.py, since it's the same
+global dataset - and every biogeo observation_log/observation points at that
+sampling_log/campaign and the "compilation" provision, not "lucas_eu_2009". Unlike
+LC1/LU1 (which get each record's real survey date), BIOGEO16 uses the campaign's own
+fixed vintage date.
 
 IMPORTANT - nitrogen (N) unit normalisation to weight percent (w%):
 - LUCAS.SOIL_corr.csv: already w%, no conversion.
@@ -71,7 +73,7 @@ import numpy as np
 
 CSV_PATH = "/Users/thomasgumbricht/GitHub_xspatula/LUCAS_TO_JSON/2009"
 OUTPUT_ROOT = "../import_data/LUCAS_2009"
-RECORDS = 0  # max rows to import from each enabled file; 0 = all rows
+RECORDS = 50  # max rows to import from each enabled file; 0 = all rows
 
 MAIN_CSV_FILENAME = "LUCAS.SOIL_corr.csv"
 PTOTAL_FILENAME = "PTotal2009.dbf"
@@ -95,9 +97,9 @@ CONTACT_EMAIL = "inherit"
 CAMPAIGN_NAME = "lucas_eu_2009"
 LAB_PROVISION = "lucas-wetlab-2009"
 SPECTRA_PROVISION = "foss xds rca"
-LANDSCAPE_PROVISION = "landscape"
-BIOGEO_CAMPAIGN_NAME = "biogeo16_eu_2020"
-BIOGEO_PROVISION = "biogeo16"
+LANDSCAPE_PROVISION = "human interpretation"
+BIOGEO_CAMPAIGN_NAME = "biogeo16"
+BIOGEO_PROVISION = "compilation"
 LAB_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{SPECTRA_PROVISION}"
 LANDSCAPE_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LANDSCAPE_PROVISION}"
@@ -105,13 +107,14 @@ BIOGEO_OBSERVATION_LOG_NAME = f"{BIOGEO_CAMPAIGN_NAME}@{BIOGEO_PROVISION}"
 SPECTROMETER_PROVISION_ID = "foss-xds-rca"
 SPECTROMETER_SERIAL = "lucas 2009"
 
-BIOGEO_OBSERVED_AT = "2020-05-01"  # fixed date, literal text, not a full timestamp
-BIOGEO_DATE_TOKEN = "20200501"     # same date, filename-safe (no dashes)
+BIOGEO_OBSERVED_AT = "2016-03-31"  # fixed date, literal text, not a full timestamp
+BIOGEO_DATE_TOKEN = "20160331"     # same date, filename-safe (no dashes)
 BIOGEO_MISSING_VALUES = {"", "NA", "Outside"}
 
 # LC1 codes (lowercased) present in the 2009 data that have no match at any level
 # (order/family/genus) of the land_cover hierarchy yet. LU1 is fully covered.
-LANDCOVER_SKIP_CODES = {"f00", "g10", "g20", "h21"}
+# LANDCOVER_SKIP_CODES = {"f00", "g10", "g20", "h21"}
+LANDCOVER_SKIP_CODES = {}
 
 MONTH_ABBR = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -265,6 +268,30 @@ def step1_sampling_log():
     )
     write_pilot_txt(sampling_log_dir, "SAMPLING_LOG", [sampling_log_filename])
 
+
+# ---------------------------------------------------------------------------
+# step 1b - static sampling_log for the biogeo16 campaign
+# ---------------------------------------------------------------------------
+
+def step1b_biogeo_sampling_log():
+    biogeo_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "sampling_log")
+
+    sampling_log_params = {
+        "campaign_id__campaign_name": BIOGEO_CAMPAIGN_NAME,
+        "name": BIOGEO_CAMPAIGN_NAME,
+        "contact_name": CONTACT_NAME,
+        "contact_email": CONTACT_EMAIL,
+        "abstract": "Sampling log for the EEA biogeo16 European biogeographical regions dataset",
+    }
+    sampling_log_filename = f"{BIOGEO_CAMPAIGN_NAME}_sampling_log.json"
+
+    write_process_json(
+        os.path.join(biogeo_dir, "manage_process", sampling_log_filename),
+        "manage_sampling_log",
+        sampling_log_params,
+    )
+    write_pilot_txt(biogeo_dir, "SAMPLING_LOG", [sampling_log_filename])
+
 # ---------------------------------------------------------------------------
 # step 2 - static observation log
 # ---------------------------------------------------------------------------
@@ -319,7 +346,7 @@ def step2_observation_log():
         "name": LANDSCAPE_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
-        "in-situ": 1,  # NOTE: not yet a manage_observation_log parameter, pending schema update
+        "field": 1, 
     }
     landscape_filename = f"{LANDSCAPE_OBSERVATION_LOG_NAME}_observation_log.json"
     write_process_json(
@@ -335,7 +362,7 @@ def step2_observation_log():
         "name": BIOGEO_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
-        "satellite": 1,
+        "auxiliary": 1,
     }
     biogeo_filename = f"{BIOGEO_OBSERVATION_LOG_NAME}_observation_log.json"
     write_process_json(
@@ -570,10 +597,10 @@ def step8_land_cover(main_records):
         iso_country = record["iso.country"]
         date_value = record.get("date")
         params = {
-            "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            #"sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
-            "provision_id__provision_name": LANDSCAPE_PROVISION,
+            #"provision_id__provision_name": LANDSCAPE_PROVISION,
             "landcover_genus_id__landcover_genus_name": code,
         }
         if date_value:
@@ -608,10 +635,10 @@ def step9_land_use(main_records):
         iso_country = record["iso.country"]
         date_value = record.get("date")
         params = {
-            "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            #"sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
-            "provision_id__provision_name": LANDSCAPE_PROVISION,
+            #"provision_id__provision_name": LANDSCAPE_PROVISION,
             "landuse_genus_id__landuse_genus_name": code,
         }
         if date_value:
@@ -640,15 +667,16 @@ def step10_biogeo_observation(main_records):
         point_id = record["POINT_ID"]
         params = {
             "observation_log_id__observation_log_name": BIOGEO_OBSERVATION_LOG_NAME,
-            "sample_id__sample_name": sample_name(point_id),
-            "provision_id__provision_name": BIOGEO_PROVISION,
+            #"sample_id__sample_name": sample_name(point_id),
+            "geolocation_id__geolocation_name": geolocation_name(record["iso.country"], point_id),
+            #"provision_id__provision_name": BIOGEO_PROVISION,
             "observed_at": BIOGEO_OBSERVED_AT,
-            "@biogeo16": value,
+            "biogeo16_id__biogeo16_name": value.lower(),
         }
         filename = observation_filename(BIOGEO_OBSERVATION_LOG_NAME, point_id, BIOGEO_DATE_TOKEN)
         write_process_json(
             os.path.join(observation_dir, "manage_process", filename),
-            "manage_landscape",
+            "manage_biogeo16_observation",
             params,
         )
         filenames.append(filename)
@@ -674,6 +702,7 @@ JOB_FILE_SPECS = [
     ("land_use", "process_landscape/land_use", "xspatula_add_land_use_pilot.txt"),
     ("observation_log_biogeo", "process_biogeo/observation_log", "xspatula_add_observation_log_pilot.txt"),
     ("observation_biogeo", "process_biogeo/observation", "xspatula_add_observation_pilot.txt"),
+    ("sampling_log_biogeo", "process_biogeo/sampling_log", "xspatula_add_sampling_log_pilot.txt"),
 ]
 
 
@@ -853,6 +882,7 @@ def main():
 
     steps = [
         ("step1 - campaign & sampling_log", step1_sampling_log, ()),
+        ("step1b - process_biogeo/sampling_log", step1b_biogeo_sampling_log, ()),
         ("step2 - observation_log", step2_observation_log, ()),
         ("step4 - geolocation", step4_geolocation, (all_records,)),
         ("step5 - sample", step5_sample, (all_records,)),
@@ -863,8 +893,8 @@ def main():
         ("step11 - job_LUCAS_2009_*.json files", step11_job_files, ()),
     ]
     if INCLUDE_MAIN_2009:
-        steps.insert(2, ("step3 - spectrometer", step3_spectrometer, (spc_columns,)))
-        steps.insert(6, ("step7 - process_spectra/observation", step7_spectra_observation, (record_rows, idx, spc_columns)))
+        steps.insert(3, ("step3 - spectrometer", step3_spectrometer, (spc_columns,)))
+        steps.insert(7, ("step7 - process_spectra/observation", step7_spectra_observation, (record_rows, idx, spc_columns)))
 
     failures = []
     for label, func, args in steps:
