@@ -1,0 +1,8 @@
+name: prepare_lucas_py_3.12
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy
+  - dbfread
