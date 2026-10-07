@@ -8,8 +8,7 @@ Python package for seeding a PostgreSQL database with the published LUCAS soil s
 
 ## What is this?
 
-`xspatula_lucas` builds a PostgreSQL database for the [LUCAS](https://esdac.jrc.ec.europa.eu/projects/lucas)
-(Land Use/Cover Area frame Survey) soil sampling campaigns using the Xspatula framework. All
+`xspatula_lucas` builds a PostgreSQL database for the [LUCAS](https://esdac.jrc.ec.europa.eu/projects/lucas) (Land Use/Cover Area frame Survey) soil sampling campaigns using the Xspatula framework. All
 execution logic lives in JSON files — not in code. You define schemes, jobs, pilots, and processes
 in JSON; a Jupyter notebook calls the framework; the framework reads the JSON and runs the
 pipeline.
@@ -28,8 +27,8 @@ example of loading a real soil dataset with the Xspatula framework.
 conda env create --file setup/anaconda/xspatula_ai4sh_py_3.12.yml
 ```
 
-> The environment and kernel are still named `xspatula_ai4sh_py_3.12` — inherited from the parent
-> `xspatula_ai4sh` package this repo was excerpted from and not yet renamed. Same for the example
+> The environment and kernel are still named `xspatula_ai4sh_py_3.12` — inherited from the twin
+> `xspatula_ai4sh` repo package. Same for the example
 > scheme files in the next step.
 
 ### 2. Edit the scheme file
@@ -62,9 +61,21 @@ To delete the database, use `setup/delete_db.ipynb` instead.
    [xspatula_lucas_docs](https://xspatula.github.io/xspatula_lucas_docs/lucas_2009/) for the full
    walkthrough, including one notebook cell to skip.
 
-### 5. Explore, preprocess, and model
+### 5. Load the LUCAS 2015 campaign
 
-Once the campaign is loaded, `lucas/project_lucas_2009/` has three notebooks — `explore_select_data.ipynb`,
+1. Register at https://esdac.jrc.ec.europa.eu/projects/lucas and download the files available for 
+   LUCAS  2015.
+2. Run `lucas/prepare_lucas_data/lucas_2015_to_xspatula.py` against the downloaded data. It generates the
+   JSON job files and pilot `.txt` files under `lucas/import_data/LUCAS_2015/`.
+3. Open the notebooks in `lucas/import_data/` — `insert_utility.ipynb`,
+   `insert_lucas_dataset_meta.ipynb`, `load_LUCAS_2015.ipynb` (in that order) — and run them
+   against the generated job files to insert the campaign into the database. See
+   [xspatula_lucas_docs](https://xspatula.github.io/xspatula_lucas_docs/lucas_2015/) for the full
+   walkthrough, including one notebook cell to skip.
+
+### 6. Explore, preprocess, and model
+
+Once the campaign is loaded, the example project `lucas/project_lucas_2009/` has three notebooks — `explore_select_data.ipynb`,
 `ml_preprocess.ipynb`, `ml_model.ipynb` — for pulling a working subset out of the database and
 running it through preprocessing and regression. See
 [xspatula_lucas_docs](https://xspatula.github.io/xspatula_lucas_docs/lucas_2009/machine_learning/explore_select_data/)
@@ -115,9 +126,11 @@ xspatula_lucas/
     │   └── lucas_2009_to_xspatula.py  # CSV → xspatula JSON/pilot files
     ├── import_data/
     │   ├── LUCAS_2009/            # Generated job/pilot files for the 2009 campaign
+    │   ├── LUCAS_2015/            # Generated job/pilot files for the 2015 campaign
     │   ├── dataset_meta/          # Campaign/dataset metadata job files
     │   ├── utility/                # Utility-schema job files
     │   ├── load_LUCAS_2009.ipynb             # Notebook: insert the 2009 campaign
+    │   ├── load_LUCAS_2015.ipynb             # Notebook: insert the 2015 campaign
     │   ├── insert_lucas_dataset_meta.ipynb  # Notebook: insert dataset metadata
     │   └── insert_utility.ipynb             # Notebook: insert utility records
     ├── project_lucas_2009/        # Machine learning: explore/select, preprocess, model
@@ -168,7 +181,7 @@ Eight built-in PostgreSQL user roles are created during setup:
 |---|---|
 | `community_admin` | Manage users and organisations |
 | `login_evaluation` | Validate login attempts (minimal rights) |
-| `user_cat_0` – `user_cat_5` | Data access, most restricted (0) to most permissive (5) |
+| `user_cat_1` – `user_cat_5` | Data access, most restricted (0) to most permissive (5) |
 
 ---
 
@@ -193,7 +206,7 @@ Full documentation at **[xspatula.github.io/xspatula_lucas_docs](https://xspatul
 
 - Framework architecture, database setup, and process setup — shared with the rest of the
   Xspatula family, documented at [xspatula.github.io/xspatula_core_docs](https://xspatula.github.io/xspatula_core_docs/)
-- LUCAS-specific dataset metadata, sample, and observation handling, the full LUCAS 2009
+- LUCAS-specific dataset metadata, sample, and observation handling, the full LUCAS 2009/2015
   download → prepare → insert walkthrough, and the explore/preprocess/model machine learning
   pipeline — documented in this repo's own manual
 
