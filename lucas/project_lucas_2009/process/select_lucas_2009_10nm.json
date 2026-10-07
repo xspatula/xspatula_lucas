@@ -15,7 +15,7 @@
         "max_profile": 20,
         "indicator_array": ["cec", "clay", "silt", "sand", "c-org","n-tot","ph-water"],
         "data_range": "",
-        "as_absorbance": true,
+        "output_unit": "absorb",
         "output_root_fp": "./data"
       }
     }
