@@ -69,24 +69,6 @@ provider.json
 # You can add quantitates in quantity.xls and rerun this insert.
 quantity.json
 
-# LEFT TODO
-# Reference proprietor - any source of external archive or library used for deriving observation values
-# You can add reference proprietor in reference_proprietor.xls and rerun this insert.
-#reference_proprietor.json
-
-# Setting system for defining local juxtapositions.
-# Where system is a thematic frame for defining specific juxtapositions (e.g. for fields, forests, lakes etc).
-# You can add setting systems in setting_system.xls and rerun this insert.
-setting_system.json
-
-# LEFT TODO
-# Soil horizon for defining scientific soil horizons.
-
-# LEFT TODO
-# Sound includes tables for:
-# -sound_setup,
-# -sound_mic.
-
 # Spatial reference systems used for geolocation, mainly based on EPSG standard codes.
 # You can add spatial reference systems in spatial_reference.xls and rerun this insert.
 spatial_reference.json
@@ -147,11 +129,6 @@ indicator.json
 # You can add indicator parities in indicator_parity.xls and rerun this insert.
 indicator_parity.json
 
-# Juxtaposition is the thematic local setting of a sample (e.g. in a field, forest, lake etc).
-# require: setting_system.
-# You can add juxtaposition in juxtaposition.xls and rerun this insert.
-juxtaposition.json
-
 # Profiling for samples with z-dimension (e.g. soil, sediment or ice cores).
 # require: unit.
 # You can add profiling in profiling.xls and rerun this insert.
@@ -162,15 +139,6 @@ profiling.json
 # require: quantity, species, unit.
 # You can add quantity default units in quantity_default_unit.xls and rerun this insert.
 #quantity_default_unit.json
-
-# LEFT TODO
-# Taxa defines arbitrary taxa with its Linnean classification level
-# require: taxa_level, taxa_status
-
-# LEFT TODO
-# Taxa function defines ecosystem functions related to a taxa
-# require: taxa_level, taxa_status.
-
 
 # Unit translate defines the mathematical translation between different units.
 # require: unit.
