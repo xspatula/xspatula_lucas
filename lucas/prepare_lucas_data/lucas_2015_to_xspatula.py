@@ -398,7 +398,7 @@ def step5_sample(records):
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             "profile_min": 0,
             "profile_max": 20,
-            "juxtaposition_id__juxtaposition_name": "uniform",
+            #"juxtaposition_id__juxtaposition_name": "uniform",
             "proximity_id__proximity_name": "general",
             "composition_id__composition_name": "composite",
         }

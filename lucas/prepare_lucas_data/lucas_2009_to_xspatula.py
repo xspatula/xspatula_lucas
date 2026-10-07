@@ -111,10 +111,9 @@ BIOGEO_OBSERVED_AT = "2016-03-31"  # fixed date, literal text, not a full timest
 BIOGEO_DATE_TOKEN = "20160331"     # same date, filename-safe (no dashes)
 BIOGEO_MISSING_VALUES = {"", "NA", "Outside"}
 
-# LC1 codes (lowercased) present in the 2009 data that have no match at any level
-# (order/family/genus) of the land_cover hierarchy yet. LU1 is fully covered.
-# LANDCOVER_SKIP_CODES = {"f00", "g10", "g20", "h21"}
-LANDCOVER_SKIP_CODES = {}
+
+# LANDCOVER_SKIP_CODES is for setting LC1 codes that are missing or should be skipped during processing
+LANDCOVER_SKIP_CODES = set()
 
 MONTH_ABBR = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
@@ -470,7 +469,7 @@ def step5_sample(records):
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             "profile_min": 0,
             "profile_max": 20,
-            "juxtaposition_id__juxtaposition_name": "uniform",
+            #"juxtaposition_id__juxtaposition_name": "uniform",
             "proximity_id__proximity_name": "general",
             "composition_id__composition_name": "composite",
         })
