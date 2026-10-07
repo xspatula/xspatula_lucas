@@ -115,3 +115,6 @@ lucas/import_data/eDNA/
 setup/zzz/lucas/setup_db/json/organism/
 setup/zzz/lucas/setup_db/json/organism_utility/
 setup/zzz/lucas/setup_processes/json/organism_utlity/
+
+# LibreOffice lock files
+.~lock.*#
