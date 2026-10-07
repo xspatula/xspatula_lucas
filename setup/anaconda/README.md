@@ -1,12 +1,19 @@
-## Create virtual python environment for xspatula
+## Create virtual python environment and setup cubist regressor
+
+This README file cover:
+- Create/delete virtual python environment for xspatula
+- Installing Cubist regressor
+- Create/delete virtual python environment for LUCAS data import
+
+## Create/delete virtual python environment for xspatula
 
 To create a virtual python environment for xspatula you can use the file _xspatula_py_3.12.yml_.
 Open a Terminal window and navigate to the folder that contains _xspatula_py_3.12.yml_. Then execute the command _conda env create_ as shown below. When you start a new notebook in the xspatula package, select the _xspatula_py_3.12.yml_ as the python environment.
 
-## Create virtual python enviornment
+## Create virtual python enviornment for xspatula
 conda env create --file xspatula_py_3.12.yml
 
-## Remove virtual python environment
+## Remove virtual python environment for xspatula
 conda remove --name xspatula_py_3.12 --all
 
 ## Installing Cubist regressor
@@ -17,13 +24,13 @@ conda activate xspatula_py_3.12
 
 pip install --upgrade cubist
 
-## Create virtual python environment for LUCAS data import
+## Create/delete virtual python environment for LUCAS data import
 
 To create a virtual python environment for importing LUCAS data use the file _prepare_lucas_py_3.12.yml_.
 Open a Terminal window and navigate to the folder that contains _prepare_lucas_py_3.12.yml_. Then execute the command _conda env create_ as shown below. When you start a new notebook in the xspatula package, select the _prepare_lucas_py_3.12.yml_ as the python environment.
 
-## Create virtual python enviornment
+### Create virtual python enviornment for LUCAS data import
 conda env create --file prepare_lucas_py_3.12.yml
 
-## Remove virtual python environment
+### Remove virtual python environment for LUCAS data import
 conda remove --name prepare_lucas_py_3.12 --all
