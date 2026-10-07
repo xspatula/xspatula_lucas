@@ -124,8 +124,8 @@
               "parameter": "output_unit",
               "parameter_type": "text",
               "required": false,
-              "default_value": "reflectance",
-              "hint": "Desired output unit, reflectance, absorbance or ...",
+              "default_value": "refl",
+              "hint": "Output signal type: refl, absorb, transm, flrs, libs or raman. Only refl -> absorb conversion is supported; written as header row 2 of the spectral columns",
               "schema_table": {
                 "schema": "observation_utility",
                 "table": "spectrometer",
@@ -198,18 +198,6 @@
               "required": true,
               "default_value": "",
               "hint": "Root directory for saving the Parquet subset. Saved under {output_root_fp}/{provision_name}/{dataset}_{begin}-{end}_{bw}/",
-              "schema_table": {
-                "schema": "observation",
-                "table": "dataset",
-                "write": false
-              }
-            },
-            {
-              "parameter": "as_absorbance",
-              "parameter_type": "boolean",
-              "required": false,
-              "default_value": false,
-              "hint": "If set to true spectral signal are translated from reflectance to absorbance",
               "schema_table": {
                 "schema": "observation",
                 "table": "dataset",
