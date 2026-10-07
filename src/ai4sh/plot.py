@@ -32,6 +32,8 @@ from src.ai4sh.feature_symbols import Load_feature_symbols
 
 from src.ai4sh.parquet_units import Read_parquet_with_units
 
+from src.ai4sh.spectral_columns import Band_value, Is_band_col, Signal_type_of, SIGNAL_TYPE_LABELS
+
 def _spectra_x_axis(columns):
     '''Return (x_values, x_label) appropriate for the given spectral column list.'''
     if not columns:
@@ -90,6 +92,9 @@ class Process_plot(Get_schema_table):
         self.project_root_FP = project_root_FP
 
         self.pg_ai4sh_C = PG_manage_AI4SH(pg_session_C)
+
+        # y-axis label for spectra, set from header row 2 when the Parquet is loaded
+        self.signal_label = SIGNAL_TYPE_LABELS['refl']
 
     def _Sub_process(self, _json_file_key):
 
@@ -155,6 +160,9 @@ class Process_plot(Get_schema_table):
         # params-*.json copy, which is kept only as a fallback for older files.
         if units_D:
             params_D['indicator_units'] = units_D
+
+        self.signal_label = SIGNAL_TYPE_LABELS[
+            Signal_type_of(units_D, [c for c in df.columns if Is_band_col(c)])]
 
         if self.verbose >= 1:
             n_samples = params_D.get('n_samples', len(df))
@@ -253,7 +261,7 @@ class Process_plot(Get_schema_table):
         file_suffix: filename stem derived from chain_ann (e.g. "snv_mc").
         '''
         x_vals, x_label = _spectra_x_axis(step_cols)
-        y_label = 'Score' if step_cols and str(step_cols[0]).startswith('pc') else 'Reflectance'
+        y_label = 'Score' if step_cols and str(step_cols[0]).startswith('pc') else self.signal_label
 
         fig, ax = plt.subplots(figsize=(10, 5))
         for i, (_, row) in enumerate(df_step.iterrows()):
@@ -500,12 +508,11 @@ class Process_plot(Get_schema_table):
 
         if not indicators:
             # Use all non-spectral, non-metadata columns
-            skip_prefixes = ('w_',)
             skip_cols = {'sample_name', 'campaign_name', 'latitude_dd', 'longitude_dd',
                          'profile_min', 'profile_max'}
             indicators = [
                 c for c in df.columns
-                if c not in skip_cols and not any(c.startswith(px) for px in skip_prefixes)
+                if c not in skip_cols and not Is_band_col(c)
             ]
 
         # Keep only indicators that exist in the DataFrame
@@ -572,9 +579,9 @@ class Process_plot(Get_schema_table):
             print('    ERROR: %s' % e)
             return
 
-        spectral_cols = [c for c in df.columns if c.startswith('w_')]
+        spectral_cols = [c for c in df.columns if Is_band_col(c)]
         if not spectral_cols:
-            print('    ERROR: no spectral columns (w_*) found in the data.')
+            print('    ERROR: no spectral columns (wl_*, wn_*) found in the data.')
             return
 
         # Subsample rows
@@ -596,7 +603,7 @@ class Process_plot(Get_schema_table):
         plot_dir = self._Build_plot_output_path(project_root_fp) if save else None
 
         # Build spectral-only DataFrame with integer wavelength column names
-        wavelengths = [int(c[2:]) for c in spectral_cols]
+        wavelengths = [Band_value(c) for c in spectral_cols]
         spec_df = df_sub[spectral_cols].copy()
         spec_df.columns = wavelengths
 
@@ -665,9 +672,9 @@ class Process_plot(Get_schema_table):
             print('    ERROR: %s' % e)
             return None, None, None, None, None, None, None, None
 
-        spectral_cols = [c for c in df.columns if c.startswith('w_')]
+        spectral_cols = [c for c in df.columns if Is_band_col(c)]
         if not spectral_cols:
-            print('    ERROR: no spectral columns (w_*) found in the data.')
+            print('    ERROR: no spectral columns (wl_*, wn_*) found in the data.')
             return None, None, None, None, None, None, None, None
 
         n_total = len(df)
@@ -687,7 +694,7 @@ class Process_plot(Get_schema_table):
         if bw:
             ann += '  bw=%s nm' % bw
 
-        wavelengths = [int(c[2:]) for c in spectral_cols]
+        wavelengths = [Band_value(c) for c in spectral_cols]
         spec_df = df_sub[spectral_cols].copy()
         spec_df.columns = wavelengths
 
@@ -714,7 +721,7 @@ class Process_plot(Get_schema_table):
 
         for ax, (abbrev, label, df_step, step_cols) in zip(axs, panels):
             x_vals, _ = _spectra_x_axis(step_cols)
-            y_label = 'Score' if step_cols and str(step_cols[0]).startswith('pc') else 'Reflectance'
+            y_label = 'Score' if step_cols and str(step_cols[0]).startswith('pc') else self.signal_label
             for i, (_, row) in enumerate(df_step.iterrows()):
                 ax.plot(x_vals, row[step_cols].values, color=colors[i], linewidth=0.5)
             ax.set_ylabel(y_label, fontsize=7)

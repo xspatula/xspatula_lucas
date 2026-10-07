@@ -23,6 +23,8 @@ from src.ai4sh.feature_symbols import Load_target_units
 
 from src.ai4sh.parquet_units import Save_parquet_with_units
 
+from src.ai4sh.spectral_columns import Band_col_name, Normalize_signal_type, Set_signal_type, DEFAULT_SIGNAL_TYPE
+
 
 class Process_select(Get_schema_table):
     '''Select a filtered spectral subset from the database and save locally as Parquet.'''
@@ -191,7 +193,26 @@ class Process_select(Get_schema_table):
 
         data_range = self._Parse_data_range()
 
-        as_absorbance = bool(getattr(p, 'as_absorbance', False))
+        # Stored spectra are reflectance (hard-coded until the sensor signal type is in the DB)
+        source_signal_type = DEFAULT_SIGNAL_TYPE
+
+        try:
+
+            output_signal_type = Normalize_signal_type(getattr(p, 'output_unit', '') or source_signal_type)
+
+        except ValueError as e:
+
+            print('    ERROR: output_unit: %s' % e)
+
+            return
+
+        if output_signal_type not in (source_signal_type, 'absorb'):
+
+            print('    ERROR: conversion from %s to %s is not supported' % (source_signal_type, output_signal_type))
+
+            return
+
+        as_absorbance = source_signal_type == 'refl' and output_signal_type == 'absorb'
 
         preparation_name = getattr(p, 'preparation_name', '').strip()
 
@@ -273,7 +294,7 @@ class Process_select(Get_schema_table):
             lab_recs = []
 
         # ---- 4. Build spectral DataFrame ----
-        wl_col_names = ['w_%d' % wl for wl in output_wl]
+        wl_col_names = [Band_col_name(wl) for wl in output_wl]
 
         rows = []
 
@@ -491,7 +512,7 @@ class Process_select(Get_schema_table):
         # ---- 7. Save ----
         os.makedirs(out_dir, exist_ok=True)
 
-        Save_parquet_with_units(df, data_fpn, applied_units_D)
+        Save_parquet_with_units(df, data_fpn, Set_signal_type(applied_units_D, wl_col_names, output_signal_type))
 
         params_D = {
             'dataset_name': p.dataset_name,
@@ -506,7 +527,7 @@ class Process_select(Get_schema_table):
             'indicator_array': indicators,
             'indicator_units': applied_units_D,
             'data_range': data_range,
-            'as_absorbance': as_absorbance,
+            'output_unit': output_signal_type,
             'output_wavelengths': [int(w) for w in output_wl],
             'n_samples': len(df),
         }

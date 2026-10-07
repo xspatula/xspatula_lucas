@@ -7,6 +7,7 @@ Created on 25 April 2026
 import os
 import glob
 import json
+import numbers
 import re
 
 import numpy as np
@@ -28,6 +29,8 @@ from src.ai4sh.chemometrics import (apply_derivative, apply_scatter_correction,
                                      apply_chemometrics, _load_chemometric_config)
 from src.ai4sh.filter import apply_filter, apply_multi_filter
 from src.ai4sh.parquet_units import Read_parquet_with_units, Save_parquet_with_units
+from src.ai4sh.spectral_columns import (Band_col_name, Band_value, Is_band_col,
+                                       Set_signal_type, Signal_type_of)
 
 from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
@@ -70,19 +73,20 @@ _DERIVED_RE = re.compile(
     r'_(?:ol|vt|ma|gf|sg|lw|mf|wc|uv(?:-[\w-]+)?|d\d+(?:app)?|snv|msc|l1|l2|max|l1snv|snvmsc|mc|as|ps|poi|pca\d+|(?:[\w-]+-)?(?:pms|rfe|tree))$'
 )
 
-# Spectral column patterns: w_1350 (raw), d1350 (derivative), pc1 (PCA), wc1 (Ward cluster)
-_SPECTRAL_COL_RE = re.compile(r'^(?:w_\d+|d\d+|pc\d+|wc\d+)$')
+# Spectral column patterns: wl_nm_1350 (band, see spectral_columns.py), d1350 (derivative),
+# pc1 (PCA), wc1 (Ward cluster)
+_DERIVED_SPECTRAL_COL_RE = re.compile(r'^(?:d\d+|pc\d+|wc\d+)$')
 
 
 def _is_spectral_col(col):
-    return bool(_SPECTRAL_COL_RE.match(str(col)))
+    return Is_band_col(col) or bool(_DERIVED_SPECTRAL_COL_RE.match(str(col)))
 
 
 def _col_to_index(col):
     '''Extract the numeric index from a spectral column name.'''
     s = str(col)
-    if s.startswith('w_'):
-        return int(s[2:])
+    if Is_band_col(s):
+        return Band_value(s)
     if s.startswith('pc') or s.startswith('wc'):
         return int(s[2:])
     if s.startswith('d'):
@@ -98,7 +102,7 @@ def _normalize_params_to_companion(d):
     wavelengths = out.pop('output_wavelengths', [])
     out['output_data'] = {
         'data_type': 'wavelength',
-        'column_format': 'w_{n} — n is wavelength in nm',
+        'column_format': 'wl_nm_{n} — n is wavelength in nm',
         'spectral_array': wavelengths,
     }
     out.setdefault('preprocessing_chain', [])
@@ -123,8 +127,16 @@ def _load_companion_json(project_root_fp, stem):
     return None
 
 
-def _build_output_data(out_cols):
+def _build_output_data(out_cols, signal_type=None):
     '''Build output_data dict from output column names.'''
+    out = _build_output_format(out_cols)
+    if signal_type:
+        out['signal_type'] = signal_type
+    return out
+
+
+def _build_output_format(out_cols):
+    '''Describe the column format of the output column names.'''
     if not out_cols:
         return {'data_type': 'unknown', 'column_format': '', 'spectral_array': []}
     first = str(out_cols[0])
@@ -148,7 +160,7 @@ def _build_output_data(out_cols):
         }
     return {
         'data_type': 'wavelength',
-        'column_format': 'w_{n} — n is wavelength in nm',
+        'column_format': 'wl_nm_{n} — n is wavelength in nm',
         'spectral_array': [_col_to_index(c) if isinstance(c, str) else int(c)
                            for c in out_cols],
     }
@@ -187,10 +199,11 @@ def _step_abbrev_from_info(process_name, parameters):
     return process_name[:4]
 
 
-def _write_companion_json(project_root_fp, in_stem, out_stem, out_cols, step_info_or_list):
+def _write_companion_json(project_root_fp, in_stem, out_stem, out_cols, step_info_or_list,
+                          signal_type=None):
     '''Write companion JSON for an output parquet, inheriting input companion metadata.'''
     companion = _load_companion_json(project_root_fp, in_stem) or {}
-    companion['output_data'] = _build_output_data(out_cols)
+    companion['output_data'] = _build_output_data(out_cols, signal_type)
     chain = list(companion.get('preprocessing_chain', []))
     step_num = len(chain) + 1
     steps = step_info_or_list if isinstance(step_info_or_list, list) else [step_info_or_list]
@@ -707,6 +720,7 @@ class Process_ml_preprocess(Get_schema_table):
             {'process': 'detect_outliers',
              'parameters': {'detector': detector_name, 'threshold': threshold,
                             'indicator_array': list(approved)}},
+            Signal_type_of(units_D, spectral_kept),
         )
 
         n_removed = sum(int(masks[c].sum()) for c in approved)
@@ -837,7 +851,7 @@ class Process_ml_preprocess(Get_schema_table):
         # Extract spectral columns
         spectral_cols = [c for c in df.columns if _is_spectral_col(c)]
         if not spectral_cols:
-            print('    ERROR: no spectral columns (w_*, d*, pc*) found.')
+            print('    ERROR: no spectral columns (wl_*, wn_*, d*, pc*) found.')
             return
 
         wavelengths = [_col_to_index(c) for c in spectral_cols]
@@ -899,6 +913,7 @@ class Process_ml_preprocess(Get_schema_table):
             project_root_fp, stem, out_stem, retain_cols,
             {'process': 'select_variance_threshold',
              'parameters': {'scaler': scaler_name, 'threshold': threshold}},
+            Signal_type_of(units_D, retain_cols),
         )
 
         print('    Removed %d band%s. %d band%s retained. Saved: %s' % (
@@ -942,7 +957,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         spectral_cols = [c for c in df.columns if _is_spectral_col(c)]
         if not spectral_cols:
-            print('    ERROR: no spectral columns (w_*, d*, pc*) found.')
+            print('    ERROR: no spectral columns (wl_*, wn_*, d*, pc*) found.')
             return None
 
         wavelengths = [_col_to_index(c) for c in spectral_cols]
@@ -1057,23 +1072,24 @@ class Process_ml_preprocess(Get_schema_table):
             return None, False
 
         non_spectral = [c for c in df_orig.columns if not _is_spectral_col(c)]
+        signal_type  = Signal_type_of(units_D or {}, [c for c in df_orig.columns if _is_spectral_col(c)])
         save_df = spec_out_full.copy()
-        # Integer wavelength columns → w_ storage convention; d/pc columns kept as-is
-        save_df.columns = ['w_%d' % c if isinstance(c, int) else str(c)
+        # Numeric wavelength columns → wl_nm_ storage convention; d/pc columns kept as-is
+        save_df.columns = [Band_col_name(c) if isinstance(c, numbers.Real) else str(c)
                             for c in out_cols]
         saved_cols = list(save_df.columns)
         df_save = pd.concat([
             df_orig[non_spectral].reset_index(drop=True),
             save_df.reset_index(drop=True),
         ], axis=1)
-        Save_parquet_with_units(df_save, out_fp, units_D)
+        Save_parquet_with_units(df_save, out_fp, Set_signal_type(units_D, saved_cols, signal_type))
         _proc = (step_info[0].get('process', 'unknown') if isinstance(step_info, list)
                  else step_info.get('process', 'unknown'))
         _write_previous_df(project_root_fp, _proc, [
             {'dataframe': os.path.basename(out_fp),
              'indicator': None, 'regressor': None, 'selector': None}
         ])
-        _write_companion_json(project_root_fp, stem, out_stem, saved_cols, step_info)
+        _write_companion_json(project_root_fp, stem, out_stem, saved_cols, step_info, signal_type)
         print('    Saved: %s' % out_fp)
         return out_fp, False
 
@@ -1933,12 +1949,14 @@ class Process_ml_preprocess(Get_schema_table):
                 return
             non_spectral = [c for c in df.columns if not _is_spectral_col(c)]
             spec_out = df[top_cols].copy()
-            spec_out.columns = ['w_%d' % wl for wl in top_wl]
+            spec_out.columns = [Band_col_name(wl) for wl in top_wl]
+            signal_type = Signal_type_of(units_D, top_cols)
             df_save = pd.concat([
                 df[non_spectral].reset_index(drop=True),
                 spec_out.reset_index(drop=True),
             ], axis=1)
-            Save_parquet_with_units(df_save, out_fp, units_D)
+            Save_parquet_with_units(df_save, out_fp,
+                                    Set_signal_type(units_D, list(spec_out.columns), signal_type))
             step_info = {
                 '_id': abbrev,
                 'process': 'spectra_indicator_permutation_selection',
@@ -1950,7 +1968,7 @@ class Process_ml_preprocess(Get_schema_table):
                 },
             }
             _write_companion_json(project_root_fp, stem, out_stem,
-                                   list(spec_out.columns), step_info)
+                                   list(spec_out.columns), step_info, signal_type)
             # Accumulate entry — caller (_prompt_and_write wrapper) collects and writes all at end
             _prev_entries_acc.append({
                 'dataframe': os.path.basename(out_fp),
