@@ -44,8 +44,6 @@ observation_utility/indicator_v10_sql.json
 
 observation_utility/indicator_parity_v10_sql.json
 
-observation_utility/juxtaposition_v10_sql.json
-
 observation_utility/license_v10_sql.json
 
 observation_utility/location_method_v10_sql.json
@@ -72,8 +70,6 @@ observation_utility/quantity_default_unit_v10_sql.json
 
 observation_utility/quantity_v10_sql.json
 
-observation_utility/setting_system_v10_sql.json
-
 observation_utility/spatial_reference_v10_sql.json
 
 observation_utility/spectrometer_v10_sql.json
@@ -87,26 +83,6 @@ observation_utility/transportation_v10_sql.json
 observation_utility/unit_translate_v10_sql.json
 
 observation_utility/unit_v10_sql.json
-
-### OBSERVATION UTILITIES ORGANISMS ###
-
-organism_utility/taxon_v10_sql.json
-
-### OBSERVATION UTILITIES eDNA ###
-
-observation_utility/edna_sequence_library_v10_sql.json
-
-observation_utility/edna_nucleotide_archive_v10_sql.json
-
-observation_utility/edna_extraction_v10_sql.json
-
-observation_utility/edna_purification_v10_sql.json
-
-observation_utility/edna_amplification_v10_sql.json
-
-observation_utility/edna_sequencing_v10_sql.json
-
-observation_utility/edna_metabarcoding_pipeline_v10_sql.json
 
 ### observation DATASET ###
 
@@ -128,7 +104,7 @@ observation/sample_v10_sql.json
 
 observation/sample_geolocation_v10_sql.json
 
-###FOR LATER###observation_sample+location_v10_sql.json
+### FOR LATER### observation_sample+location_v10_sql.json
 
 observation/sampling_log_v10_sql.json
 
