@@ -73,7 +73,7 @@ lucas/import_data/utility/observation/excel/provision.xlsx's "compilation" row),
 to the LUCAS 2015 campaign, so it gets its own sampling_log (step1b) - identical in
 both this script and lucas_2009_to_xspatula.py, since it's the same global dataset -
 and every biogeo observation_log/observation points at that sampling_log/campaign
-and the "compilation" provision, not "lucas_eu_2015". The observed date is fixed at
+and the "compilation" provision, not "lucas 2015". The observed date is fixed at
 the campaign's own vintage (2016-03-31) for every record, as literal text (not
 padded to a timestamp).
 
@@ -113,16 +113,18 @@ TEXTURE_COLUMNS = ("coarse", "clay", "sand", "silt")
 
 CONTACT_NAME = "inherit"
 CONTACT_EMAIL = "inherit"
-CAMPAIGN_NAME = "lucas_eu_2015"
-LAB_PROVISION = "lucas-wetlab-2015"
-SPECTRA_PROVISION = "foss xds rca"  # same instrument as 2009, different serial
+CAMPAIGN_NAME = "lucas 2015"
+SAMPLING_LOG_NAME = "lucas 2015 eu"
+LAB_PROVISION = "lucas wetlab 2015"
+SPECTRA_PROVISION = "foss xds rapid content analyzer"  # same instrument as 2009, different serial
 LANDSCAPE_PROVISION = "human interpretation"
-BIOGEO_CAMPAIGN_NAME = "biogeo16"
-BIOGEO_PROVISION = "compilation"
-LAB_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LAB_PROVISION}"
-SPECTRA_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{SPECTRA_PROVISION}"
-LANDSCAPE_OBSERVATION_LOG_NAME = f"{CAMPAIGN_NAME}@{LANDSCAPE_PROVISION}"
-BIOGEO_OBSERVATION_LOG_NAME = f"{BIOGEO_CAMPAIGN_NAME}@{BIOGEO_PROVISION}"
+BIOGEO_CAMPAIGN_NAME = "biogeo16 2016"
+BIOGEO_SAMPLING_LOG_NAME = "biogeo16 2016 eu"
+BIOGEO_PROVISION = "compilat"
+LAB_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{LAB_PROVISION}"
+SPECTRA_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{SPECTRA_PROVISION}"
+LANDSCAPE_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{LANDSCAPE_PROVISION}"
+BIOGEO_OBSERVATION_LOG_NAME = f"{BIOGEO_SAMPLING_LOG_NAME}@{BIOGEO_PROVISION}"
 SPECTROMETER_PROVISION_ID = "foss-xds-rca"
 SPECTROMETER_SERIAL = "lucas 2015"
 WAVELENGTH_UNIT = "nm"
@@ -212,7 +214,7 @@ def step1_sampling_log():
 
     sampling_log_params = {
         "campaign_id__campaign_name": CAMPAIGN_NAME,
-        "name": CAMPAIGN_NAME,
+        #"name": CAMPAIGN_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "abstract": "Sampling log for lucas eu 2015",
@@ -237,7 +239,7 @@ def step1b_biogeo_sampling_log():
 
     sampling_log_params = {
         "campaign_id__campaign_name": BIOGEO_CAMPAIGN_NAME,
-        "name": BIOGEO_CAMPAIGN_NAME,
+        #"name": BIOGEO_SAMPLING_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "abstract": "Sampling log for the EEA biogeo16 European biogeographical regions dataset",
@@ -262,9 +264,9 @@ def step2_observation_log():
     landscape_dir = os.path.join(OUTPUT_ROOT, "process_landscape", "observation_log")
 
     lab_params = {
-        "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
         "provision_id__provision_name": LAB_PROVISION,
-        "name": LAB_OBSERVATION_LOG_NAME,
+        #"name": LAB_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "preparation_id__preparation_name": "ds2",
@@ -281,9 +283,9 @@ def step2_observation_log():
     write_pilot_txt(lab_dir, "OBSERVATION_LOG", [lab_filename])
 
     spectra_params = {
-        "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
         "provision_id__provision_name": SPECTRA_PROVISION,
-        "name": SPECTRA_OBSERVATION_LOG_NAME,
+        #"name": SPECTRA_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "preparation_id__preparation_name": "ds2",
@@ -300,9 +302,9 @@ def step2_observation_log():
     write_pilot_txt(spectra_dir, "OBSERVATION_LOG", [spectra_filename])
 
     landscape_params = {
-        "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
         "provision_id__provision_name": LANDSCAPE_PROVISION,
-        "name": LANDSCAPE_OBSERVATION_LOG_NAME,
+        #"name": LANDSCAPE_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "field": 1, 
@@ -390,7 +392,7 @@ def step5_sample(records):
         seen.add(point_id)
         iso_country = record["iso.country"]
         params = {
-            "sampling_log_id__sampling_log_name": CAMPAIGN_NAME,
+            "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
             "tag": point_id,
             "name": sample_name(point_id),
             "sampled_at": MISSING_DATE_TOKEN,
@@ -565,9 +567,9 @@ def step9_land_use(records):
 def step10_biogeo_observation_log():
     biogeo_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "observation_log")
     params = {
-        "sampling_log_id__sampling_log_name": BIOGEO_CAMPAIGN_NAME,
+        "sampling_log_id__sampling_log_name": BIOGEO_SAMPLING_LOG_NAME,
         "provision_id__provision_name": BIOGEO_PROVISION,
-        "name": BIOGEO_OBSERVATION_LOG_NAME,
+        #"name": BIOGEO_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "auxiliary": 1,
