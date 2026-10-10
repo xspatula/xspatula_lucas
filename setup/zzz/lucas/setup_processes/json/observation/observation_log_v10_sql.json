@@ -2,7 +2,7 @@
   "process": [
     {
       "process": "add_process",
-      "overwrite": false,
+      "overwrite": true,
       "parameters": {
         "root_process": "manage_table_data",
         "process": "manage_observation_log",
@@ -98,7 +98,7 @@
             {
               "parameter": "name",
               "parameter_type": "text",
-              "required": true,
+              "required": false,
               "default_value": "auto",
               "hint": "The name of the observation log, auto = sampling_log+@+provision",
               "schema_table": {
@@ -112,6 +112,25 @@
               },
               "auto_name": {
                 "concat": "'%s@%s' %(sampling_log_id__sampling_log_name, provision_id__provision_name)"
+              }
+            },
+            {
+              "parameter": "tag",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "auto",
+              "hint": "The name of the observation log, auto = sampling_log+@+provision",
+              "schema_table": {
+                "schema": "observation",
+                "table": "observation_log",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              },
+              "auto_name": {
+                "concat": "'%s@%s' %(sampling_log_id__sampling_log_tag, provision_id__provision_tag)"
               }
             },
             {

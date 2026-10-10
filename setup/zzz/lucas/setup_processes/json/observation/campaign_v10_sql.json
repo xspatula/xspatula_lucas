@@ -34,7 +34,7 @@
             {
               "parameter": "name",
               "parameter_type": "text",
-              "required": true,
+              "required": false,
               "default_value": "auto",
               "hint": "Name of the campaign",
               "schema_table": {
@@ -47,7 +47,31 @@
                 "delete": false
               },
               "auto_name": {
-                "concat": "%s_%s  %(dataset_id__dataset_alias, begun_at)"
+                "concat": "'%s %s' %(dataset_id__dataset_alias, datetime_tag)"
+              }
+            },
+            {
+              "parameter": "tag",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "auto",
+              "hint": "Unique tag used for auto naming production files and results, should be less than 16 chars and not contain at (@) or blank",
+              "schema_table": {
+                "schema": "observation",
+                "table": "campaign",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              },
+              "auto_name": {
+                "concat": "'%s_%s' %(dataset_id__dataset_tag, datetime_tag)"
+              },
+              "format": {
+                "at": false,
+                "capital": false,
+                "blank": false
               }
             },
             {
@@ -66,7 +90,7 @@
                 "delete": false
               },
               "auto_name": {
-                "concat": "%s_%s  %(dataset_id__dataset_alias, begun_at)"
+                "concat": "'%s %s' %(dataset_id__dataset_alias, datetime_tag)"
               }
             },
             {
@@ -147,6 +171,28 @@
               "permission": {
                 "update": true,
                 "delete": false
+              }
+            },
+            {
+              "parameter": "datetime_tag",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Unique tag used for auto naming production files and results, should be less than 24 chars not contain underscore, at (@) or blank",
+              "schema_table": {
+                "schema": "observation",
+                "table": "campaign",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              },
+              "format": {
+                "underscore": false,
+                "at": false,
+                "capital": false,
+                "blank": false
               }
             },
             {
