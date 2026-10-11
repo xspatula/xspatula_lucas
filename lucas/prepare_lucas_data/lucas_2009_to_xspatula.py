@@ -96,11 +96,16 @@ CONTACT_NAME = "inherit"
 CONTACT_EMAIL = "inherit"
 CAMPAIGN_NAME = "lucas 2009"
 SAMPLING_LOG_NAME = "lucas 2009 eu"
+# Tags are globally unique - use them when referring to parents in auto-named records
+CAMPAIGN_TAG = "lucas_2009"
+SAMPLING_LOG_TAG = "lucas_2009_eu"
 LAB_PROVISION = "lucas wetlab 2009"
 SPECTRA_PROVISION = "foss xds rapid content analyzer"
 LANDSCAPE_PROVISION = "human interpretation"
 BIOGEO_CAMPAIGN_NAME = "biogeo16 2016"
 BIOGEO_SAMPLING_LOG_NAME = "biogeo16 2016 eu"
+BIOGEO_CAMPAIGN_TAG = "biogeo16_2016"
+BIOGEO_SAMPLING_LOG_TAG = "biogeo16_2016_eu"
 BIOGEO_PROVISION = "compilation"
 LAB_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{SPECTRA_PROVISION}"
@@ -253,7 +258,7 @@ def step1_sampling_log():
     lab_dir = os.path.join(OUTPUT_ROOT, "process_lab")
 
     sampling_log_params = {
-        "campaign_id__campaign_name": CAMPAIGN_NAME,
+        "campaign_id__campaign_name": CAMPAIGN_TAG,
         #"name": CAMPAIGN_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
@@ -278,7 +283,7 @@ def step1b_biogeo_sampling_log():
     biogeo_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "sampling_log")
 
     sampling_log_params = {
-        "campaign_id__campaign_name": BIOGEO_CAMPAIGN_NAME,
+        "campaign_id__campaign_name": BIOGEO_CAMPAIGN_TAG,
         # "name": BIOGEO_CAMPAIGN_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
@@ -304,7 +309,7 @@ def step2_observation_log():
     biogeo_dir = os.path.join(OUTPUT_ROOT, "process_biogeo", "observation_log")
 
     lab_params = {
-        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_TAG,
         "provision_id__provision_name": LAB_PROVISION,
         #"name": LAB_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
@@ -323,7 +328,7 @@ def step2_observation_log():
     write_pilot_txt(lab_dir, "OBSERVATION_LOG", [lab_filename])
 
     spectra_params = {
-        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_TAG,
         "provision_id__provision_name": SPECTRA_PROVISION,
         #"name": SPECTRA_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
@@ -342,7 +347,7 @@ def step2_observation_log():
     write_pilot_txt(spectra_dir, "OBSERVATION_LOG", [spectra_filename])
 
     landscape_params = {
-        "sampling_log_id__sampling_log_name": SAMPLING_LOG_NAME,
+        "sampling_log_id__sampling_log_name": SAMPLING_LOG_TAG,
         "provision_id__provision_name": LANDSCAPE_PROVISION,
         #"name": LANDSCAPE_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
@@ -358,7 +363,7 @@ def step2_observation_log():
     write_pilot_txt(landscape_dir, "OBSERVATION_LOG", [landscape_filename])
 
     biogeo_params = {
-        "sampling_log_id__sampling_log_name": BIOGEO_SAMPLING_LOG_NAME,
+        "sampling_log_id__sampling_log_name": BIOGEO_SAMPLING_LOG_TAG,
         "provision_id__provision_name": BIOGEO_PROVISION,
         #"name": BIOGEO_OBSERVATION_LOG_NAME,
         "contact_name": CONTACT_NAME,
