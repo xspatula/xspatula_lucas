@@ -113,18 +113,19 @@ TEXTURE_COLUMNS = ("coarse", "clay", "sand", "silt")
 
 CONTACT_NAME = "inherit"
 CONTACT_EMAIL = "inherit"
-CAMPAIGN_NAME = "lucas 2015"
-SAMPLING_LOG_NAME = "lucas 2015 eu"
+CAMPAIGN_NAME = "lucas european union"
+SAMPLING_LOG_NAME = "lucas european union 2015"
+# Campaign = dataset + territory (place), sampling_log = campaign + datetime_tag (time).
 # Tags are globally unique - use them when referring to parents in auto-named records
-CAMPAIGN_TAG = "lucas_2015"
-SAMPLING_LOG_TAG = "lucas_2015_eu"
+CAMPAIGN_TAG = "lucas_eu"
+SAMPLING_LOG_TAG = "lucas_eu_2015"
 LAB_PROVISION = "lucas wetlab 2015"
 SPECTRA_PROVISION = "foss xds rapid content analyzer"  # same instrument as 2009, different serial
 LANDSCAPE_PROVISION = "human interpretation"
-BIOGEO_CAMPAIGN_NAME = "biogeo16 2016"
-BIOGEO_SAMPLING_LOG_NAME = "biogeo16 2016 eu"
-BIOGEO_CAMPAIGN_TAG = "biogeo16_2016"
-BIOGEO_SAMPLING_LOG_TAG = "biogeo16_2016_eu"
+BIOGEO_CAMPAIGN_NAME = "biogeo16 european union"
+BIOGEO_SAMPLING_LOG_NAME = "biogeo16 european union 2016"
+BIOGEO_CAMPAIGN_TAG = "biogeo16_eu"
+BIOGEO_SAMPLING_LOG_TAG = "biogeo16_eu_2016"
 BIOGEO_PROVISION = "compilation"
 LAB_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{LAB_PROVISION}"
 SPECTRA_OBSERVATION_LOG_NAME = f"{SAMPLING_LOG_NAME}@{SPECTRA_PROVISION}"
@@ -219,12 +220,16 @@ def step1_sampling_log():
 
     sampling_log_params = {
         "campaign_id__campaign_name": CAMPAIGN_TAG,
+        "datetime_tag": "2015",
+        "begun_at": 20150501,
+        "ended_at": 20151031,
+        "url": "https://esdac.jrc.ec.europa.eu/content/lucas2015-topsoil-data",
         #"name": CAMPAIGN_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "abstract": "Sampling log for lucas eu 2015",
     }
-    sampling_log_filename = f"{CAMPAIGN_NAME}_sampling_log.json"
+    sampling_log_filename = f"{SAMPLING_LOG_TAG}_sampling_log.json"
 
     sampling_log_dir = os.path.join(lab_dir, "sampling_log")
     write_process_json(
@@ -244,12 +249,16 @@ def step1b_biogeo_sampling_log():
 
     sampling_log_params = {
         "campaign_id__campaign_name": BIOGEO_CAMPAIGN_TAG,
+        "datetime_tag": "2016",
+        "begun_at": 20160331,
+        "ended_at": 20261231,
+        "url": "https://www.eea.europa.eu/en/datahub/datahubitem-view/11db8d14-f167-4cd5-9205-95638dfd9618",
         #"name": BIOGEO_SAMPLING_LOG_NAME,
         "contact_name": CONTACT_NAME,
         "contact_email": CONTACT_EMAIL,
         "abstract": "Sampling log for the EEA biogeo16 European biogeographical regions dataset",
     }
-    sampling_log_filename = f"{BIOGEO_CAMPAIGN_NAME}_sampling_log.json"
+    sampling_log_filename = f"{BIOGEO_SAMPLING_LOG_TAG}_sampling_log.json"
 
     write_process_json(
         os.path.join(biogeo_dir, "manage_process", sampling_log_filename),
@@ -409,7 +418,7 @@ def step5_sample(records):
             "proximity_id__proximity_name": "general",
             "composition_id__composition_name": "composite",
         }
-        filename = f"{CAMPAIGN_NAME}_{point_id}_0_20_sample.json"
+        filename = f"{SAMPLING_LOG_TAG}_{point_id}_0_20_sample.json"
         write_process_json(
             os.path.join(sample_dir, "manage_process", filename),
             "manage_geolocated_profile_sample",
@@ -524,7 +533,7 @@ def step8_land_cover(records):
             "landcover_genus_id__landcover_genus_name": code,
             "observed_at": DEFAULT_OBSERVED_AT,
         }
-        filename = f"{CAMPAIGN_NAME}_{point_id}_land_cover.json"
+        filename = f"{SAMPLING_LOG_TAG}_{point_id}_land_cover.json"
         write_process_json(
             os.path.join(land_cover_dir, "manage_process", filename),
             "manage_land_cover_observation",
@@ -555,7 +564,7 @@ def step9_land_use(records):
             "landuse_genus_id__landuse_genus_name": code,
             "observed_at": DEFAULT_OBSERVED_AT,
         }
-        filename = f"{CAMPAIGN_NAME}_{point_id}_land_use.json"
+        filename = f"{SAMPLING_LOG_TAG}_{point_id}_land_use.json"
         write_process_json(
             os.path.join(land_use_dir, "manage_process", filename),
             "manage_land_use_observation",
