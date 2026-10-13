@@ -13,6 +13,7 @@ from math import ceil
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 
 # Application package imports
 from src.postgres import Get_schema_table
@@ -118,24 +119,21 @@ class Process_plot(Get_schema_table):
     # ------------------------------------------------------------------
 
     def _Parse_indicator_array(self):
-        '''Return list of indicator names from the indicator_array parameter.
+        '''Return list of indicator and covariate names from the indicator_array and covariate_array
+        parameters (in that order, without duplicates).
 
         Handles JSON list, CSV string, or postgres "{a,b,c}" format.
         '''
-        raw = getattr(self.process_S.process.parameters, 'indicator_array', '')
+        names = []
 
-        if not raw:
-            return []
+        for key in ('indicator_array', 'covariate_array'):
 
-        if isinstance(raw, list):
-            return [x.strip() for x in raw if x.strip()]
+            for name in self._Parse_chemometrics_array(getattr(self.process_S.process.parameters, key, '')):
 
-        s = str(raw).strip()
+                if name not in names:
+                    names.append(name)
 
-        if s.startswith('{') and s.endswith('}'):
-            s = s[1:-1]
-
-        return [x.strip() for x in s.split(',') if x.strip()]
+        return names
 
     def _Load_parquet_data(self, project_root_fp):
         '''Find and load the selected {name}.parquet + {name}.json from project_root_fp
@@ -369,6 +367,120 @@ class Process_plot(Get_schema_table):
 
             plt.close(multi_fig)
 
+    def _Class_style(self, symbols, name):
+        '''Return bar style kwargs for a nominal covariate from its symbol: color, alpha, hatch
+        (e.g. "//", "xx", ".."), fill (false = outline only) and edgecolor (default = color).'''
+
+        sym = symbols.get(name, {})
+
+        color = sym.get('color', 'steelblue')
+
+        fill = sym.get('fill', True)
+
+        return dict(color=color if fill else 'none', alpha=sym.get('alpha', 1.0), hatch=sym.get('hatch'),
+                    edgecolor=sym.get('edgecolor', color), linewidth=0.8)
+
+    def _Class_counts(self, series, max_classes):
+        '''Return class counts (largest first), the classes beyond max_classes summed as "other".'''
+
+        counts = series.dropna().astype(str).value_counts()
+
+        if max_classes and len(counts) > max_classes:
+
+            other = counts.iloc[max_classes:].sum()
+
+            counts = counts.iloc[:max_classes]
+
+            counts['other (%s classes)' % (len(series.dropna().unique()) - max_classes)] = other
+
+        return counts
+
+    def _Class_bar_axes(self, ax, counts, label, style, fontsize):
+        '''Draw class counts as horizontal bars (largest on top) on ax.'''
+
+        names = [n if len(n) <= 40 else n[:39] + '…' for n in counts.index]
+
+        ax.barh(names[::-1], counts.values[::-1], height=0.7, **style)
+
+        # Same bar thickness for few classes: room for at least 5 bars, bars at the top
+        n_bars = len(counts)
+
+        ax.set_ylim(n_bars - max(n_bars, 5) - 0.6, n_bars - 0.4)
+
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        ax.set_title(label)
+
+        ax.set_xlabel('samples')
+
+        ax.tick_params(axis='y', labelsize=fontsize)
+
+        ax.text(0.98, 0.02, '%s class%s, n = %s' % (len(counts), '' if len(counts) == 1 else 'es', int(counts.sum())), transform=ax.transAxes,
+                fontsize=fontsize, ha='right', va='bottom', color='gray')
+
+    def _Class_bar_plot(self, df, covariates, symbols, max_classes, show, save, plot_dir,
+                        individual_canvas_plot=True, single_canvas_plot=False):
+        '''Plot class counts for each nominal covariate — individual canvases then a grid canvas.'''
+
+        if individual_canvas_plot:
+
+            for name in covariates:
+
+                counts = self._Class_counts(df[name], max_classes)
+
+                fig, ax = plt.subplots(figsize=(7, 0.3 * max(len(counts), 5) + 1.5))
+
+                self._Class_bar_axes(ax, counts, self._Get_symbol(symbols, name)[1],
+                                     self._Class_style(symbols, name), 8)
+
+                fig.tight_layout()
+
+                if save:
+                    fpn = os.path.join(plot_dir, 'classes_%s.png' % name)
+                    fig.savefig(fpn, bbox_inches='tight')
+                    if self.verbose >= 1:
+                        print('    Saved: %s' % fpn)
+
+                if show:
+                    plt.show()
+
+                plt.close(fig)
+
+        if len(covariates) > 1 and single_canvas_plot:
+
+            n_cols = 2
+
+            n_rows = ceil(len(covariates) / n_cols)
+
+            all_counts = [self._Class_counts(df[name], max_classes) for name in covariates]
+
+            row_height = 0.3 * max(max(len(c) for c in all_counts), 5) + 1.5
+
+            multi_fig, multi_axs = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * row_height))
+
+            axs_flat = np.array(multi_axs).flatten()
+
+            for f, (name, counts) in enumerate(zip(covariates, all_counts)):
+
+                self._Class_bar_axes(axs_flat[f], counts, self._Get_symbol(symbols, name)[1],
+                                     self._Class_style(symbols, name), 7)
+
+            for idx in range(len(covariates), len(axs_flat)):
+                axs_flat[idx].set_visible(False)
+
+            multi_fig.tight_layout()
+
+            if save:
+                fpn = os.path.join(plot_dir, 'classes_all-covariates.png')
+                multi_fig.savefig(fpn, bbox_inches='tight')
+                if self.verbose >= 1:
+                    print('    Saved: %s' % fpn)
+
+            if show:
+                plt.show()
+
+            plt.close(multi_fig)
+
     def _Boxplot_plot(self, df, indicators, symbols, show, save, plot_dir,
                       transform_dict=None, standard_dict=None,
                       individual_canvas_plot=True, single_canvas_plot=False, applied_units_D=None):
@@ -518,8 +630,14 @@ class Process_plot(Get_schema_table):
             print('    No indicators found in the data. Available columns: %s' % list(df.columns))
             return
 
+        # Nominal (class) indicators/covariates are plotted as class counts, numeric ones as
+        # histograms and boxplots
+        nominal = [i for i in indicators if not pd.api.types.is_numeric_dtype(df[i])]
+
+        indicators = [i for i in indicators if i not in nominal]
+
         if self.verbose >= 1:
-            print('    Plotting %d indicator(s): %s' % (len(indicators), indicators))
+            print('    Plotting %d numeric: %s and %d nominal: %s' % (len(indicators), indicators, len(nominal), nominal))
 
         # Apply transformation and standardisation before plotting
         transformation_param = getattr(p, 'transformation', 'default')
@@ -546,6 +664,13 @@ class Process_plot(Get_schema_table):
         plot_dir = self._Build_plot_output_path(project_root_fp) if save else None
 
         applied_units_D = params_D.get('indicator_units', {}) if params_D else {}
+
+        if nominal and (do_histogram or do_boxplot):
+            self._Class_bar_plot(df, nominal, symbols, getattr(p, 'max_classes', 15), show, save, plot_dir,
+                                 individual_canvas_plot, single_canvas_plot)
+
+        if not indicators:
+            return
 
         if do_histogram:
             self._Histogram_plot(df, indicators, symbols, bins, show, save, plot_dir,

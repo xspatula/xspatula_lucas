@@ -39,6 +39,20 @@
               "hint": "Comma separated list of the indicators to plot"
             },
             {
+              "parameter": "covariate_array",
+              "parameter_type": "array",
+              "required": false,
+              "default_value": "",
+              "hint": "Comma separated list of the covariates to plot; nominal (class) covariates are plotted as class counts"
+            },
+            {
+              "parameter": "max_classes",
+              "parameter_type": "integer",
+              "required": false,
+              "default_value": 15,
+              "hint": "Max number of classes shown per nominal covariate; the remaining classes are summed as other"
+            },
+            {
               "parameter": "targetfeaturesymbols",
               "parameter_type": "text",
               "required": false,

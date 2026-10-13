@@ -107,6 +107,27 @@
       "alpha": 0.2,
       "label": "Silt cont.",
       "unit": "native"
+    },
+    "landcover": {
+      "color": "olivedrab",
+      "alpha": 0.6,
+      "hatch": "//",
+      "label": "Land cover",
+      "unit": "native"
+    },
+    "landuse": {
+      "color": "goldenrod",
+      "alpha": 0.6,
+      "hatch": "\\\\",
+      "label": "Land use",
+      "unit": "native"
+    },
+    "biogeo16": {
+      "color": "teal",
+      "alpha": 0.6,
+      "hatch": "xx",
+      "label": "Biogeographic region",
+      "unit": "native"
     }
   },
   "featureImportancePlot": {

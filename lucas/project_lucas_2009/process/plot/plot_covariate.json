@@ -1,0 +1,24 @@
+{
+  "process": [
+    {
+      "process": "plot_indicators",
+      "parameters": {
+        "project_root_fp": "./project_lucas_2009/data/covariate/lucas_eu_2009",
+        "covariate_array": [
+          "landcover",
+          "landuse",
+          "biogeo16"
+        ],
+        "targetfeaturesymbols": "default",
+        "standardisation": "default",
+        "transformation": "default",
+        "single_canvas_plot": true,
+        "individual_canvas_plot": false,
+        "boxplot": true,
+        "histogram": true,
+        "show": true,
+        "save": true
+      }
+    }
+  ]
+}

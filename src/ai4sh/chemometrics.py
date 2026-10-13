@@ -99,7 +99,8 @@ def apply_transformations(df, indicators, param, verbose=0):
     df_out = df.copy()
 
     for col in indicators:
-        if col not in df_out.columns:
+        # Nominal (class) columns can not be transformed or standardised
+        if col not in df_out.columns or not pd.api.types.is_numeric_dtype(df_out[col]):
             continue
 
         col_cfg = config.get(col, {})
@@ -168,7 +169,8 @@ def apply_standardisation(df, indicators, param, verbose=0):
     df_out = df.copy()
 
     for col in indicators:
-        if col not in df_out.columns:
+        # Nominal (class) columns can not be transformed or standardised
+        if col not in df_out.columns or not pd.api.types.is_numeric_dtype(df_out[col]):
             continue
 
         if not config.get(col, False):
