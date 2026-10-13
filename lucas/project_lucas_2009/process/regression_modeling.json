@@ -4,7 +4,7 @@
       "process": "regression_modeling",
       "overwrite": true,
       "parameters": {
-        "project_root_fp": "./project_lucas_2009/data/lucas_400-2500_10",
+        "project_root_fp": "./project_lucas_2009/data/compiled/lucas_2009_10nm",
         "dataframe":"raw",
         "indicator_array": ["c-org","sand"],
         "regressor_array": ["ols","huber"],

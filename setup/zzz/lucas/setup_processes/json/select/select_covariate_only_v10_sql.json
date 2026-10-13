@@ -161,7 +161,7 @@
               "parameter_type": "text",
               "required": false,
               "default_value": "default",
-              "hint": "Name of the Parquet subset, saved as data-{output_name}.parquet with params-{output_name}.json; default = {covariate aliases joined by -}_{min_profile}-{max_profile}",
+              "hint": "Name of the Parquet subset, saved as {output_name}.parquet with {output_name}.json; default = {covariate aliases joined by -}_{min_profile}-{max_profile}",
               "schema_table": {
                 "schema": "observation",
                 "table": "sample",

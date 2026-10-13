@@ -65,7 +65,7 @@
               "parameter_type": "text",
               "required": true,
               "default_value": "",
-              "hint": "Name of the compiled dataset (folder and data-{output_name}.parquet)",
+              "hint": "Name of the compiled dataset (folder and {output_name}.parquet)",
               "schema_table": {
                 "schema": "observation",
                 "table": "sample",

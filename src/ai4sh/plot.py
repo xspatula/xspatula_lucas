@@ -7,7 +7,6 @@ Created on 22 April 2026
 # Standard library imports
 import os
 import json
-import glob
 from math import ceil
 
 # Third-party imports
@@ -30,7 +29,7 @@ from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_conf
 
 from src.ai4sh.feature_symbols import Load_feature_symbols
 
-from src.ai4sh.parquet_units import Read_parquet_with_units
+from src.ai4sh.parquet_units import Read_parquet_with_units, Find_selected_parquet
 
 from src.ai4sh.spectral_columns import Band_value, Is_band_col, Signal_type_of, SIGNAL_TYPE_LABELS
 
@@ -139,25 +138,22 @@ class Process_plot(Get_schema_table):
         return [x.strip() for x in s.split(',') if x.strip()]
 
     def _Load_parquet_data(self, project_root_fp):
-        '''Find and load data-*.parquet + params-*.json from project_root_fp.
+        '''Find and load the selected {name}.parquet + {name}.json from project_root_fp
+        (see Find_selected_parquet).
 
         Returns (DataFrame, params_dict). Raises FileNotFoundError if not found.
         '''
-        parquet_matches = glob.glob(os.path.join(project_root_fp, 'data-*.parquet'))
-        params_matches = glob.glob(os.path.join(project_root_fp, 'params-*.json'))
+        parquet_fpn, params_fpn = Find_selected_parquet(project_root_fp)
 
-        if not parquet_matches:
-            raise FileNotFoundError('No data-*.parquet file found in: %s' % project_root_fp)
-
-        df, units_D = Read_parquet_with_units(parquet_matches[0])
+        df, units_D = Read_parquet_with_units(parquet_fpn)
 
         params_D = {}
-        if params_matches:
-            with open(params_matches[0]) as f:
+        if params_fpn:
+            with open(params_fpn) as f:
                 params_D = json.load(f)
 
         # Units embedded in the Parquet's column MultiIndex take priority over the (legacy)
-        # params-*.json copy, which is kept only as a fallback for older files.
+        # JSON copy, which is kept only as a fallback for older files.
         if units_D:
             params_D['indicator_units'] = units_D
 
@@ -167,7 +163,7 @@ class Process_plot(Get_schema_table):
         if self.verbose >= 1:
             n_samples = params_D.get('n_samples', len(df))
             print('    Loaded %d rows (%d expected) from %s' % (
-                len(df), n_samples, os.path.basename(parquet_matches[0])))
+                len(df), n_samples, os.path.basename(parquet_fpn)))
 
         return df, params_D
 

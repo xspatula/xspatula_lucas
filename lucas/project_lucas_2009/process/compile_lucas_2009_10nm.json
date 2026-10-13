@@ -5,8 +5,8 @@
       "overwrite": false,
       "parameters": {
         "input_array": [
-          "./project_lucas_2009/data/spectra/foss-xds-rca/ds2/lucas_eu_2009/data-400-2500_10.parquet",
-          "./project_lucas_2009/data/indicator/lucas_eu_2009/data-cec-clay-silt-sand-c-org-n-tot-ph-water_0-20.parquet"
+          "./project_lucas_2009/data/spectra/foss-xds-rca/ds2/lucas_eu_2009/400-2500_10.parquet",
+          "./project_lucas_2009/data/indicator/lucas_eu_2009/cec-clay-silt-sand-c-org-n-tot-ph-water_0-20.parquet"
         ],
         "output_root_fp": "./project_lucas_2009/data",
         "output_name": "lucas_2009_10nm"

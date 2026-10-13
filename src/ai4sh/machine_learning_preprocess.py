@@ -5,7 +5,6 @@ Created on 25 April 2026
 '''
 
 import os
-import glob
 import json
 import numbers
 import re
@@ -28,7 +27,8 @@ from src.ai4sh.chemometrics import (apply_derivative, apply_scatter_correction,
                                      apply_scaling, apply_decomposition,
                                      apply_chemometrics, _load_chemometric_config)
 from src.ai4sh.filter import apply_filter, apply_multi_filter
-from src.ai4sh.parquet_units import Read_parquet_with_units, Save_parquet_with_units
+from src.ai4sh.parquet_units import (Read_parquet_with_units, Save_parquet_with_units,
+                                    Find_selected_parquet, DERIVED_STEM_RE)
 from src.ai4sh.spectral_columns import (Band_col_name, Band_value, Is_band_col,
                                        Set_signal_type, Signal_type_of)
 
@@ -69,9 +69,7 @@ def _parse_array_param(raw):
 
 
 # Regex matching any known preprocessing suffix at the end of a parquet stem.
-_DERIVED_RE = re.compile(
-    r'_(?:ol|vt|ma|gf|sg|lw|mf|wc|uv(?:-[\w-]+)?|d\d+(?:app)?|snv|msc|l1|l2|max|l1snv|snvmsc|mc|as|ps|poi|pca\d+|(?:[\w-]+-)?(?:pms|rfe|tree))$'
-)
+_DERIVED_RE = DERIVED_STEM_RE
 
 # Spectral column patterns: wl_nm_1350 (band, see spectral_columns.py), d1350 (derivative),
 # pc1 (PCA), wc1 (Ward cluster)
@@ -97,7 +95,7 @@ def _col_to_index(col):
 # ------------------------------------------------------------------ companion JSON helpers
 
 def _normalize_params_to_companion(d):
-    '''Convert old params-*.json format to new companion format.'''
+    '''Convert a selection JSON (as written by select.py) to the companion format.'''
     out = dict(d)
     wavelengths = out.pop('output_wavelengths', [])
     out['output_data'] = {
@@ -110,21 +108,15 @@ def _normalize_params_to_companion(d):
 
 
 def _load_companion_json(project_root_fp, stem):
-    '''Load companion JSON for a parquet stem. Falls back to old params-*.json.'''
-    new_fp = os.path.join(project_root_fp, stem + '.json')
-    if os.path.exists(new_fp):
-        with open(new_fp) as fh:
-            d = json.load(fh)
-        if 'output_data' not in d:
-            d = _normalize_params_to_companion(d)
-        return d
-    bare = stem[len('data-'):] if stem.startswith('data-') else stem
-    old_fp = os.path.join(project_root_fp, 'params-' + bare + '.json')
-    if os.path.exists(old_fp):
-        with open(old_fp) as fh:
-            d = json.load(fh)
-        return _normalize_params_to_companion(d)
-    return None
+    '''Load the companion {stem}.json of a parquet stem, or None if there is none.'''
+    fp = os.path.join(project_root_fp, stem + '.json')
+    if not os.path.exists(fp):
+        return None
+    with open(fp) as fh:
+        d = json.load(fh)
+    if 'output_data' not in d:
+        d = _normalize_params_to_companion(d)
+    return d
 
 
 def _build_output_data(out_cols, signal_type=None):
@@ -262,17 +254,11 @@ def _Ward_pick_best(scores):
 def _resolve_input_parquet(project_root_fp, dataframe_param):
     '''Resolve the input parquet path from the dataframe parameter.
 
-    "raw" → find data-*.parquet whose stem has no known preprocessing suffix.
+    "raw" → the selected parquet, i.e. no known preprocessing suffix (see Find_selected_parquet).
     Anything else → treat as filename (with or without .parquet extension).
     '''
     if dataframe_param.lower() == 'raw':
-        candidates = [
-            fp for fp in glob.glob(os.path.join(project_root_fp, 'data-*.parquet'))
-            if not _DERIVED_RE.search(os.path.splitext(os.path.basename(fp))[0])
-        ]
-        if not candidates:
-            raise FileNotFoundError('No raw data-*.parquet found in: %s' % project_root_fp)
-        return candidates[0]
+        return Find_selected_parquet(project_root_fp)[0]
     name = dataframe_param if dataframe_param.endswith('.parquet') else dataframe_param + '.parquet'
     fp = os.path.join(project_root_fp, name)
     if not os.path.exists(fp):
@@ -468,29 +454,22 @@ class Process_ml_preprocess(Get_schema_table):
     # ------------------------------------------------------------------ helpers
 
     def _Load_parquet_data(self, project_root_fp):
-        '''Load data-*.parquet (excluding _ol files) + params-*.json.'''
-        parquet_matches = [
-            f for f in glob.glob(os.path.join(project_root_fp, 'data-*.parquet'))
-            if '_ol' not in os.path.basename(f)
-        ]
-        params_matches = glob.glob(os.path.join(project_root_fp, 'params-*.json'))
+        '''Load the selected {name}.parquet + {name}.json (see Find_selected_parquet).'''
+        parquet_fpn, params_fpn = Find_selected_parquet(project_root_fp)
 
-        if not parquet_matches:
-            raise FileNotFoundError('No data-*.parquet file found in: %s' % project_root_fp)
-
-        df, _units_D = Read_parquet_with_units(parquet_matches[0])
+        df, _units_D = Read_parquet_with_units(parquet_fpn)
 
         params_D = {}
-        if params_matches:
-            with open(params_matches[0]) as fh:
+        if params_fpn:
+            with open(params_fpn) as fh:
                 params_D = json.load(fh)
 
         if self.verbose >= 1:
             n_expected = params_D.get('n_samples', len(df))
             print('    Loaded %d rows (%d expected) from %s' % (
-                len(df), n_expected, os.path.basename(parquet_matches[0])))
+                len(df), n_expected, os.path.basename(parquet_fpn)))
 
-        return df, params_D, parquet_matches[0]
+        return df, params_D, parquet_fpn
 
     def _Build_plot_output_path(self, project_root_fp):
         plot_dir = os.path.join(project_root_fp, 'plot')

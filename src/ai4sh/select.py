@@ -22,7 +22,7 @@ on the key column sample_id.
 
 Output paths are built from tags (see _Ml_output_paths):
 
-    {output_root_fp}/{output_sub_fp}/data-{output_name}.parquet (+ params-{output_name}.json)
+    {output_root_fp}/{output_sub_fp}/{output_name}.parquet (+ {output_name}.json)
 '''
 
 # Standard library imports
@@ -418,8 +418,8 @@ class Process_select(Get_schema_table):
 
         out_dir = os.path.join(root_fp, sub_fp)
 
-        return (out_dir, os.path.join(out_dir, 'params-%s.json' % output_name),
-                os.path.join(out_dir, 'data-%s.parquet' % output_name), output_name)
+        return (out_dir, os.path.join(out_dir, '%s.json' % output_name),
+                os.path.join(out_dir, '%s.parquet' % output_name), output_name)
 
     # ------------------------------------------------------------------
     # Data retrieval
@@ -1000,7 +1000,7 @@ class Process_select(Get_schema_table):
 
         The inputs are inner joined on sample_id, so only samples present in all inputs are kept. Key
         columns are kept once (from the first input); a feature column found in two inputs is an error.
-        Saves data-{output_name}.parquet + params-{output_name}.json under
+        Saves {output_name}.parquet + {output_name}.json under
         {output_root_fp}/{output_sub_fp}/{output_name}/, a folder ready to use as project_root_fp in the
         machine learning processes.
         '''
@@ -1032,9 +1032,9 @@ class Process_select(Get_schema_table):
 
         out_dir = os.path.join(root_fp, 'compiled' if sub_fp in ('', 'default') else sub_fp, output_name)
 
-        data_fpn = os.path.join(out_dir, 'data-%s.parquet' % output_name)
+        data_fpn = os.path.join(out_dir, '%s.parquet' % output_name)
 
-        params_fpn = os.path.join(out_dir, 'params-%s.json' % output_name)
+        params_fpn = os.path.join(out_dir, '%s.json' % output_name)
 
         if os.path.exists(data_fpn) and not self.process_S.process.overwrite:
 
@@ -1067,7 +1067,7 @@ class Process_select(Get_schema_table):
 
             stem = os.path.basename(fpn)[:-len('.parquet')]
 
-            in_params_fpn = os.path.join(os.path.dirname(fpn), 'params-%s.json' % (stem[len('data-'):] if stem.startswith('data-') else stem))
+            in_params_fpn = os.path.join(os.path.dirname(fpn), '%s.json' % (stem))
 
             in_params_D = {}
 

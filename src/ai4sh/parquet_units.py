@@ -14,6 +14,9 @@ single-level strings), so no other code needs to change.
 '''
 
 # Standard library imports
+import os
+import re
+import glob
 import json
 
 # Third-party imports
@@ -21,6 +24,45 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 _UNITS_METADATA_KEY = b'ai4sh_indicator_units'
+
+# Any known machine learning preprocessing suffix at the end of a parquet stem (derived files)
+DERIVED_STEM_RE = re.compile(
+    r'_(?:ol|vt|ma|gf|sg|lw|mf|wc|uv(?:-[\w-]+)?|d\d+(?:app)?|snv|msc|l1|l2|max|l1snv|snvmsc|mc|as|ps|poi|pca\d+|(?:[\w-]+-)?(?:pms|rfe|tree))$'
+)
+
+
+def Find_selected_parquet(project_root_fp):
+    '''Return (parquet_fpn, json_fpn or None) of the selected (not derived) dataset in project_root_fp.
+
+    Selections are saved as {name}.parquet + {name}.json. Files with a preprocessing suffix
+    (DERIVED_STEM_RE) are skipped. If several
+    candidates remain, the most recently written one is used and the others are reported.
+    Raises FileNotFoundError if there is none.
+    '''
+    candidates = [fpn for fpn in glob.glob(os.path.join(project_root_fp, '*.parquet'))
+                  if not DERIVED_STEM_RE.search(os.path.splitext(os.path.basename(fpn))[0])]
+
+    if not candidates:
+        raise FileNotFoundError('No selected .parquet file found in: %s' % project_root_fp)
+
+    candidates.sort(key=os.path.getmtime, reverse=True)
+
+    if len(candidates) > 1:
+        print('    ⚠️  %s selected .parquet files in %s, using the newest: %s\n'
+              '        ignored (delete if outdated): %s'
+              % (len(candidates), project_root_fp, os.path.basename(candidates[0]),
+                 ', '.join(os.path.basename(fpn) for fpn in candidates[1:])))
+
+    parquet_fpn = candidates[0]
+
+    stem = os.path.splitext(os.path.basename(parquet_fpn))[0]
+
+    json_fpn = os.path.join(project_root_fp, stem + '.json')
+
+    if not os.path.exists(json_fpn):
+        json_fpn = None
+
+    return parquet_fpn, json_fpn
 
 
 def Read_parquet_with_units(fpn, **kwargs):

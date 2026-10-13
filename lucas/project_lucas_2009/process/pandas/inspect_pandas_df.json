@@ -3,8 +3,8 @@
     {
       "process": "inspect_pandas_dataset",
       "parameters": {
-        "project_root_fp": "./project_lucas_2009/data/lucas_400-2500_10",
-        "parquet_file": "data-foss xds rapid content analyzer_400-2500_10.parquet",
+        "project_root_fp": "./project_lucas_2009/data/compiled/lucas_2009_10nm",
+        "parquet_file": "lucas_2009_10nm.parquet",
         "column_array": "",
         "max_rows": 10
       }
