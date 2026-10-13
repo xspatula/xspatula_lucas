@@ -38,7 +38,7 @@ from src.lib.pilot import Get_project_path
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 _METADATA_COLS = frozenset([
-    'sample_name', 'campaign_name', 'latitude_dd', 'longitude_dd',
+    'sample_id', 'sample_name', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
     'profile_min', 'profile_max',
 ])
 

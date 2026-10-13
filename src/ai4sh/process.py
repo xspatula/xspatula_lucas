@@ -116,7 +116,7 @@ def Run_process(structured_process_D, scheme_params_D):
 
             elif root_process == 'select_data':
 
-                select_C = Process_select(process_S, pg_session_C)
+                select_C = Process_select(process_S, pg_session_C, scheme_params_D['project_root_FP'])
 
                 select_C._Sub_process(key)
 

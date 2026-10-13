@@ -1,0 +1,21 @@
+{
+  "process": [
+    {
+      "process": "select_covariate_only",
+      "overwrite": false,
+      "parameters": {
+        "dataset": "lucas",
+        "campaign": "",
+        "sampling_log": "lucas_eu_2009",
+        "min_profile": 0,
+        "max_profile": 20,
+        "covariate_array": [
+          "landcover",
+          "landuse",
+          "biogeo16"
+        ],
+        "output_root_fp": "./project_lucas_2009/data"
+      }
+    }
+  ]
+}

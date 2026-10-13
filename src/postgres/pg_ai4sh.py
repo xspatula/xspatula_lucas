@@ -1,8 +1,28 @@
+# Standard library imports
+import re
+
 # Application package imports
 
 
 
 #from src.postgres.pg_session import PG_session
+
+
+# Sample latitude/longitude: geolocations imported with only x/y coordinates in the geographic
+# spatial reference have latitude/longitude left at the default 0 - fall back to y/x for those
+GEOLOCATION_LAT_LON_SQL = (
+    "CASE WHEN COALESCE(OGE.latitude, 0) = 0 AND COALESCE(OGE.longitude, 0) = 0 "
+    "AND OGE.spatial_reference_id = (SELECT id FROM observation_utility.spatial_reference WHERE name = 'geographic') "
+    "THEN OGE.y_coordinate ELSE OGE.latitude END, "
+    "CASE WHEN COALESCE(OGE.latitude, 0) = 0 AND COALESCE(OGE.longitude, 0) = 0 "
+    "AND OGE.spatial_reference_id = (SELECT id FROM observation_utility.spatial_reference WHERE name = 'geographic') "
+    "THEN OGE.x_coordinate ELSE OGE.longitude END")
+
+
+def pgsql_quote_col(identifier):
+    '''Quote an SQL identifier (schema, table or column name).'''
+
+    return '"%s"' % str(identifier).replace('"', '""')
 
 
 class PG_manage_AI4SH:
@@ -548,7 +568,7 @@ class PG_manage_AI4SH:
                     preparation_name, preparation_name)
 
             return (
-                "SELECT OS.name, OC.name, OGE.latitude, OGE.longitude, "
+                "SELECT OS.name, OC.name, " + GEOLOCATION_LAT_LON_SQL + ", "
                 "OSP.profile_min, OSP.profile_max, OOMA.value "
                 "FROM observation.observation_measurement_array AS OOMA "
                 "INNER JOIN observation.observation AS OO ON OOMA.observation_id = OO.id "
@@ -730,6 +750,193 @@ class PG_manage_AI4SH:
         # Return tuples with the original user-specified name/alias so callers
         # can match results back to the indicator labels from the process file
         return [(r[0], name_map.get(r[1], r[1]), r[2], r[3]) for r in recs]
+
+    # ===== Scope based retrieval for the select_data processes (see src/ai4sh/select.py) =====
+    #
+    # A scope is a dict {'dataset_id': int, 'campaign_id': int|None, 'sampling_log_id': int|None,
+    # 'sample_names': list} defining the samples to select. All queries return the sample id as
+    # key, as sample names are only unique within a sampling_log (e.g. LUCAS point ids in 2009 and 2015).
+
+    def _Retrieve_record_for_select(self, schema, table, value, parent_D, pg_session_C):
+        '''Find records in schema.table whose name, tag or alias equals value.
+
+        parent_D: optional {column: id} restricting the search (e.g. {'dataset_id': 1}).
+
+        Returns list of (id, name, tag) tuples. Tables without a tag column (e.g.
+        observation_utility.preparation) return the alias as tag.
+        '''
+        cols = [r[0] for r in pg_session_C._Execute_search_all_sql(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s;",
+            (schema, table))]
+
+        search_L = [c for c in ('name', 'tag', 'alias') if c in cols]
+
+        tag_col = 'tag' if 'tag' in cols else ('alias' if 'alias' in cols else 'name')
+
+        where = '(%s)' % ' OR '.join(pgsql_quote_col(c) + ' = %s' for c in search_L)
+
+        params = [value] * len(search_L)
+
+        for col, id_ in (parent_D or {}).items():
+
+            where += ' AND %s = %%s' % pgsql_quote_col(col)
+
+            params.append(id_)
+
+        sql = 'SELECT id, name, %s FROM %s.%s WHERE %s ORDER BY id;' % (
+            pgsql_quote_col(tag_col), pgsql_quote_col(schema), pgsql_quote_col(table), where)
+
+        return pg_session_C._Execute_search_all_sql(sql, params) or []
+
+    def _Scope_sql(self, scope_D):
+        '''Return (sql, params) for a subquery selecting the sample ids in scope.'''
+
+        sql = 'SELECT OS.id FROM observation.sample AS OS \
+            INNER JOIN observation.sampling_log AS OSL ON OS.sampling_log_id = OSL.id \
+            INNER JOIN observation.campaign AS OC ON OSL.campaign_id = OC.id \
+            WHERE OC.dataset_id = %s'
+
+        params = [scope_D['dataset_id']]
+
+        if scope_D.get('campaign_id'):
+
+            sql += ' AND OC.id = %s'
+
+            params.append(scope_D['campaign_id'])
+
+        if scope_D.get('sampling_log_id'):
+
+            sql += ' AND OSL.id = %s'
+
+            params.append(scope_D['sampling_log_id'])
+
+        if scope_D.get('sample_names'):
+
+            sql += ' AND OS.name = ANY(%s)'
+
+            params.append(list(scope_D['sample_names']))
+
+        return sql, params
+
+    def _Retrieve_sample_keys_for_scope(self, scope_D, pg_session_C):
+        '''Return the key columns of all samples in scope:
+        (sample_id, sample_name, sampling_log_tag, latitude, longitude, profile_min, profile_max).'''
+
+        scope_sql, params = self._Scope_sql(scope_D)
+
+        sql = 'SELECT OS.id, OS.name, OSL.tag, ' + GEOLOCATION_LAT_LON_SQL + ', OSP.profile_min, OSP.profile_max \
+            FROM observation.sample AS OS \
+            INNER JOIN observation.sampling_log AS OSL ON OS.sampling_log_id = OSL.id \
+            LEFT JOIN observation.sample_profile AS OSP ON OSP.sample_id = OS.id \
+            LEFT JOIN observation.sample_geotag AS OSGT ON OSGT.sample_id = OS.id \
+            LEFT JOIN observation.geolocation AS OGE ON OGE.id = OSGT.geolocation_id \
+            WHERE OS.id IN (%s) ORDER BY OS.id;' % scope_sql
+
+        return pg_session_C._Execute_search_all_sql(sql, params) or []
+
+    def _Retrieve_spectra_for_scope(self, scope_D, provision_id, preparation_id, pg_session_C):
+        '''Return (sample_id, signal_array) for all spectra of the provision for samples in scope,
+        optionally restricted to a sample preparation.'''
+
+        scope_sql, params = self._Scope_sql(scope_D)
+
+        prep_sql = ''
+
+        if preparation_id:
+
+            prep_sql = 'INNER JOIN observation.observation_log_meta AS OOLM \
+                ON OOLM.observation_log_id = OOL.id AND OOLM.preparation_id = %s ' % int(preparation_id)
+
+        sql = 'SELECT OO.sample_id, OOMA.value \
+            FROM observation.observation_measurement_array AS OOMA \
+            INNER JOIN observation.observation AS OO ON OOMA.observation_id = OO.id \
+            INNER JOIN observation.observation_log AS OOL ON OO.observation_log_id = OOL.id \
+            %s\
+            WHERE OOL.provision_id = %%s AND OO.sample_id IN (%s) ORDER BY OO.sample_id;' % (prep_sql, scope_sql)
+
+        return pg_session_C._Execute_search_all_sql(sql, [provision_id] + params) or []
+
+    def _Retrieve_indicator_for_select(self, value, pg_session_C):
+        '''Return (id, name, alias, quantity_name) of the indicator with name or alias value, or None.'''
+
+        sql = 'SELECT OUI.id, OUI.name, OUI.alias, OUQ.name FROM observation_utility.indicator AS OUI \
+            LEFT JOIN observation_utility.quantity AS OUQ ON OUQ.id = OUI.quantity_id \
+            WHERE OUI.name = %s OR OUI.alias = %s;'
+
+        return pg_session_C._Execute_search_single_sql(sql, (value, value))
+
+    def _Retrieve_measurements_for_scope(self, scope_D, indicator_ids, pg_session_C):
+        '''Return (sample_id, indicator_id, value, unit_name) for numeric indicators of samples in scope.
+
+        unit_name is the unit the provision behind the measurement records the indicator in
+        (observation_utility.provision_indicator.unit_id), or None if no provision/unit link exists.
+        '''
+        scope_sql, params = self._Scope_sql(scope_D)
+
+        sql = 'SELECT OO.sample_id, OOM.indicator_id, OOM.value, OUU.name \
+            FROM observation.observation_measurement AS OOM \
+            INNER JOIN observation.observation AS OO ON OOM.observation_id = OO.id \
+            INNER JOIN observation.observation_log AS OOL ON OO.observation_log_id = OOL.id \
+            LEFT JOIN observation_utility.provision_indicator AS OUPI \
+                ON OUPI.provision_id = OOL.provision_id AND OUPI.indicator_id = OOM.indicator_id \
+            LEFT JOIN observation_utility.unit AS OUU ON OUU.id = OUPI.unit_id \
+            WHERE OOM.indicator_id = ANY(%%s) AND OO.sample_id IN (%s);' % scope_sql
+
+        return pg_session_C._Execute_search_all_sql(sql, [list(indicator_ids)] + params) or []
+
+    def _Retrieve_classifications_for_scope(self, scope_D, indicator_ids, pg_session_C):
+        '''Return (sample_id, indicator_id, class_name) for nominal (class) indicators of samples in scope.'''
+
+        scope_sql, params = self._Scope_sql(scope_D)
+
+        sql = 'SELECT OO.sample_id, OOC.indicator_id, OUNC.name \
+            FROM observation.observation_classification AS OOC \
+            INNER JOIN observation.observation AS OO ON OOC.observation_id = OO.id \
+            INNER JOIN observation_utility.nominal_classification AS OUNC ON OUNC.id = OOC.value_id \
+            WHERE OOC.indicator_id = ANY(%%s) AND OO.sample_id IN (%s);' % scope_sql
+
+        return pg_session_C._Execute_search_all_sql(sql, [list(indicator_ids)] + params) or []
+
+    def _Retrieve_landscape_table(self, name, pg_session_C):
+        '''For a landscape covariate name (e.g. landcover, landuse, biogeo16) return
+        (value_column, lookup_table), where landscape.<name>_observation.<value_column> references
+        landscape_utility.<lookup_table>. Returns None if there is no such landscape table.'''
+
+        if not re.fullmatch(r'[a-z0-9_]+', name or ''):
+
+            return None
+
+        cols = [r[0] for r in pg_session_C._Execute_search_all_sql(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'landscape' AND table_name = %s;",
+            ('%s_observation' % name,))]
+
+        value_cols = [c for c in cols if c.endswith('_id') and c not in ('id', 'observation_log_id', 'geolocation_id')]
+
+        if len(value_cols) != 1:
+
+            return None
+
+        return value_cols[0], value_cols[0][:-3]
+
+    def _Retrieve_landscape_for_scope(self, scope_D, name, value_column, lookup_table, pg_session_C):
+        '''Return (sample_id, class_name) for a landscape covariate, joined to the samples in scope by
+        position (sample geolocation). If a geolocation has several observations, the one from the
+        sample's own sampling_log is preferred, then the most recent.'''
+
+        scope_sql, params = self._Scope_sql(scope_D)
+
+        sql = 'SELECT DISTINCT ON (OS.id) OS.id, LU.name \
+            FROM observation.sample AS OS \
+            INNER JOIN observation.sample_geotag AS OSGT ON OSGT.sample_id = OS.id \
+            INNER JOIN landscape.%(table)s AS LO ON LO.geolocation_id = OSGT.geolocation_id \
+            INNER JOIN observation.observation_log AS OOL ON OOL.id = LO.observation_log_id \
+            INNER JOIN landscape_utility.%(lookup)s AS LU ON LU.id = LO.%(col)s \
+            WHERE OS.id IN (%(scope)s) \
+            ORDER BY OS.id, (OOL.sampling_log_id = OS.sampling_log_id) DESC, LO.observed_at DESC;' % {
+                'table': pgsql_quote_col('%s_observation' % name), 'lookup': pgsql_quote_col(lookup_table),
+                'col': pgsql_quote_col(value_column), 'scope': scope_sql}
+
+        return pg_session_C._Execute_search_all_sql(sql, params) or []
 
     def _Retrieve_observation_id_from_observationOLD(self, query_D):
 

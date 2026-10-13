@@ -144,9 +144,17 @@ landscape/observation_lucc_v10_sql.json
 
 landscape/observation_biogeo16_v10_sql.json
 
-### SELECT SPECTRA ###
+### SELECT DATA ###
 
 select/select_data_v10_sql.json
+
+select/select_spectra_only_v10_sql.json
+
+select/select_indicator_only_v10_sql.json
+
+select/select_covariate_only_v10_sql.json
+
+select/compile_dataset_v10_sql.json
 
 ### PANDAS ###
 

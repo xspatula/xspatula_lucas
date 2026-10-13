@@ -376,6 +376,8 @@ def step4_geolocation(records):
             "name": name,
             "x_coordinate": record["GPS_LONG"],
             "y_coordinate": record["GPS_LAT"],
+            "latitude": record["GPS_LAT"],
+            "longitude": record["GPS_LONG"],
         }
         filename = f"{name}_geolocation.json"
         write_process_json(

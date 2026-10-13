@@ -45,11 +45,25 @@ sampling_log/campaign and the "compilation" provision, not "lucas 2009". Unlike
 LC1/LU1 (which get each record's real survey date), BIOGEO16 uses the campaign's own
 fixed vintage date.
 
-IMPORTANT - nitrogen (N) unit normalisation to weight percent (w%):
-- LUCAS.SOIL_corr.csv: already w%, no conversion.
-- SoilAttr_LUCAS_2012_BG_RO.dbf: mg/100g -> divide by 1000.
-- SoilAttr_ICELAND.dbf: mg/kg -> divide by 10000.
-- SoilAttr_LUCAS_2009_CYP_MLT.dbf: already w%, no conversion.
+IMPORTANT - nitrogen (N) unit normalisation to g/kg (as in LUCAS.SOIL_corr.csv), checked against the
+median C/N ratio (OC in g/kg / N), which is ~11 for mineral topsoils:
+- LUCAS.SOIL_corr.csv: g/kg (C/N 11.2), no conversion.
+- SoilAttr_LUCAS_2012_BG_RO.dbf: g/kg (C/N 10.7), no conversion.
+- SoilAttr_ICELAND.dbf: weight percent (C/N 147 if read as g/kg) -> multiply by 10.
+- SoilAttr_LUCAS_2009_CYP_MLT.dbf: g/kg (C/N 11.1, integer precision), no conversion.
+
+IMPORTANT - invalid lab values are omitted (never enter the database), see lab_float:
+- negative values: the dbf complements code "not measured" as -999 (BG_RO) or -888 (Iceland
+  texture), and a few BG_RO silt values are negative. All lab values here are contents,
+  concentrations or pH, so no negative value is valid.
+- zero values: e.g. Iceland reports CEC as 0 for all points (not measured), and N/OC/K = 0 are
+  below the reporting precision (CYP_MLT N is given in whole g/kg). Zero is kept only for the
+  columns in ZERO_IS_VALUE (coarse fragments, CaCO3), where 0 is a real result (no coarse
+  fragments, non-calcareous soil).
+- single values known to be wrong in the source (EXCLUDED_VALUES), e.g. Iceland points 90035
+  and 90057 N (C/N 1.2 and 2.5, data entry errors).
+Values below the detection limit (e.g. "<6", "<0.5") are written as half the stated limit (3, 0.25).
+The number of omitted and substituted values per column and reason is printed when the script runs.
 
 To run this script:
 - set the INCLUDE_* flags below for the files to process,
@@ -225,6 +239,70 @@ def try_float(value):
         return to_float(value)
     except (TypeError, ValueError):
         return None
+
+
+# Lab columns where 0 is a real result (no coarse fragments, non-calcareous soil); in all other
+# lab columns 0 means not measured or below the reporting precision
+ZERO_IS_VALUE = {"coarse", "CaCO3"}
+
+# Single lab values known to be wrong in the source: (POINT_ID, column) -> reason
+EXCLUDED_VALUES = {
+    ("90035", "N"): "entry error (16.3 weight percent, C/N 1.2)",
+    ("90057", "N"): "entry error (1.63 weight percent, C/N 2.5)",
+}
+
+# Omitted lab values: {(column, reason): count}, reported by main()
+OMITTED_D = {}
+
+# Values below the detection limit, written as half the limit: {(column, stated value): count}
+BELOW_DETECTION_D = {}
+
+
+def _omit(column, reason):
+    OMITTED_D[(column, reason)] = OMITTED_D.get((column, reason), 0) + 1
+    return None
+
+
+def below_detection_float(value, column):
+    """Return half the stated limit for a below-detection value like "<6" (-> 3.0), else None."""
+    if not isinstance(value, str) or not value.strip().startswith("<"):
+        return None
+    limit = try_float(value.strip()[1:])
+    if limit is None or limit <= 0:
+        return None
+    key = (column, value.strip())
+    BELOW_DETECTION_D[key] = BELOW_DETECTION_D.get(key, 0) + 1
+    return limit / 2
+
+
+def lab_float(value, column):
+    """Return a lab value as float: half the limit if below detection ("<6" -> 3.0); None if missing,
+    unparseable, negative, or 0 in a column where 0 is not a real result (see ZERO_IS_VALUE).
+    Omitted values are counted in OMITTED_D, below-detection substitutions in BELOW_DETECTION_D."""
+    if value is None or (isinstance(value, str) and value.strip() in ("", "NA")):
+        return None
+    half_limit = below_detection_float(value, column)
+    if half_limit is not None:
+        return half_limit
+    parsed = try_float(value)
+    if parsed is None:
+        return _omit(column, f"unparseable ({str(value).strip()})")
+    if parsed < 0:
+        return _omit(column, f"negative ({parsed:g})")
+    if parsed == 0 and column not in ZERO_IS_VALUE:
+        return _omit(column, "zero")
+    return parsed
+
+
+def report_omitted():
+    if OMITTED_D:
+        print("  Omitted lab values (not written to the observation JSON):")
+        for (column, reason), count in sorted(OMITTED_D.items()):
+            print(f"    {column}: {count} {reason}")
+    if BELOW_DETECTION_D:
+        print("  Below detection limit, written as half the limit:")
+        for (column, stated), count in sorted(BELOW_DETECTION_D.items()):
+            print(f"    {column}: {count} {stated} -> {try_float(stated[1:]) / 2:g}")
 
 
 def clean_dbf(value):
@@ -442,6 +520,8 @@ def step4_geolocation(records):
             "name": name,
             "x_coordinate": record["GPS_LONG"],
             "y_coordinate": record["GPS_LAT"],
+            "latitude": record["GPS_LAT"],
+            "longitude": record["GPS_LONG"],
         }
         filename = f"{name}_geolocation.json"
         write_process_json(
@@ -761,14 +841,14 @@ def main_csv_records(rows, idx, limit=0):
         for column, _ in LAB_INDICATOR_COLUMNS:
             if column == "PTotal":
                 continue
-            record[column] = try_float(row[idx[column]])
+            record[column] = lab_float(row[idx[column]], column)
         records.append(record)
         if limit and len(records) >= limit:
             break
     return records
 
 
-def load_dbf_records(path, field_map, n_divisor=None, limit=0):
+def load_dbf_records(path, field_map, n_factor=None, limit=0):
     from dbfread import DBF
 
     records = []
@@ -781,10 +861,10 @@ def load_dbf_records(path, field_map, n_divisor=None, limit=0):
             "GPS_LAT": to_float(rec.get(field_map["GPS_LAT"])),
         }
         for key in ("coarse", "clay", "silt", "sand", "pH.in.CaCl2", "pH.in.H2O", "OC", "CaCO3", "P", "K", "CEC"):
-            record[key] = try_float(rec.get(field_map[key]))
-        n_value = try_float(rec.get(field_map["N"]))
-        if n_value is not None and n_divisor:
-            n_value = n_value / n_divisor
+            record[key] = lab_float(rec.get(field_map[key]), key)
+        n_value = lab_float(rec.get(field_map["N"]), "N")
+        if n_value is not None and n_factor:
+            n_value = n_value * n_factor
         record["N"] = n_value
         records.append(record)
         if limit and len(records) >= limit:
@@ -800,7 +880,7 @@ def load_ptotal(path, limit=0):
     for rec in DBF(path, load=False, encoding="latin1"):
         rec = {k.strip(): v for k, v in rec.items()}
         point_id = str(clean_dbf(rec.get("POINT_ID"))).strip()
-        ptotal[point_id] = try_float(rec.get("PTotal"))
+        ptotal[point_id] = lab_float(rec.get("PTotal"), "PTotal")
         count += 1
         if limit and count >= limit:
             break
@@ -854,15 +934,15 @@ def load_all_records():
 
     if INCLUDE_ICELAND:
         path = os.path.join(CSV_PATH, ICELAND_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_divisor=10000, limit=RECORDS))
+        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_factor=10, limit=RECORDS))
 
     if INCLUDE_CYP_MLT:
         path = os.path.join(CSV_PATH, CYP_MLT_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_divisor=None, limit=RECORDS))
+        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_LOWER, n_factor=None, limit=RECORDS))
 
     if INCLUDE_BG_RO:
         path = os.path.join(CSV_PATH, BG_RO_FILENAME)
-        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_BG_RO, n_divisor=1000, limit=RECORDS))
+        all_records.extend(load_dbf_records(path, COMPLEMENT_FIELD_MAP_BG_RO, n_factor=None, limit=RECORDS))
 
     if INCLUDE_PTOTAL:
         path = os.path.join(CSV_PATH, PTOTAL_FILENAME)
@@ -871,6 +951,11 @@ def load_all_records():
             value = ptotal.get(record["POINT_ID"])
             if value is not None:
                 record["PTotal"] = value
+
+    for record in all_records:
+        for (point_id, column), reason in EXCLUDED_VALUES.items():
+            if record["POINT_ID"] == point_id and record.get(column) is not None:
+                record[column] = _omit(column, f"excluded, POINT_ID {point_id}: {reason}")
 
     record_rows_for_spectra = rows if RECORDS == 0 else (rows[:RECORDS] if rows is not None else None)
     return header, idx, record_rows_for_spectra, spc_columns, all_records, main_records
@@ -893,6 +978,8 @@ def main():
         print("DONE with errors: nothing was generated.")
         print(f"Output root: {os.path.abspath(OUTPUT_ROOT)}")
         sys.exit(1)
+
+    report_omitted()
 
     steps = [
         ("step1 - campaign & sampling_log", step1_sampling_log, ()),

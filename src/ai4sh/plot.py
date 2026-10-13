@@ -508,7 +508,7 @@ class Process_plot(Get_schema_table):
 
         if not indicators:
             # Use all non-spectral, non-metadata columns
-            skip_cols = {'sample_name', 'campaign_name', 'latitude_dd', 'longitude_dd',
+            skip_cols = {'sample_id', 'sample_name', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
                          'profile_min', 'profile_max'}
             indicators = [
                 c for c in df.columns
