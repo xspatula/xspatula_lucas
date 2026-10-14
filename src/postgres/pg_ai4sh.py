@@ -898,9 +898,11 @@ class PG_manage_AI4SH:
         return pg_session_C._Execute_search_all_sql(sql, [list(indicator_ids)] + params) or []
 
     def _Retrieve_landscape_table(self, name, pg_session_C):
-        '''For a landscape covariate name (e.g. landcover, landuse, biogeo16) return
-        (value_column, lookup_table), where landscape.<name>_observation.<value_column> references
-        landscape_utility.<lookup_table>. Returns None if there is no such landscape table.'''
+        '''For a landscape covariate name (e.g. landcover, landuse, biogeo16) return a dict
+        {value_column, lookup_table, hierarchical, label_columns}, where landscape.<name>_observation.<value_column>
+        references landscape_utility.<lookup_table>. hierarchical is True when the lookup table holds all
+        ranks of a classification (parent_<lookup>_id + class_rank_id, as land cover and land use).
+        Returns None if there is no such landscape table.'''
 
         if not re.fullmatch(r'[a-z0-9_]+', name or ''):
 
@@ -916,27 +918,80 @@ class PG_manage_AI4SH:
 
             return None
 
-        return value_cols[0], value_cols[0][:-3]
+        lookup = value_cols[0][:-3]
 
-    def _Retrieve_landscape_for_scope(self, scope_D, name, value_column, lookup_table, pg_session_C):
-        '''Return (sample_id, class_name) for a landscape covariate, joined to the samples in scope by
-        position (sample geolocation). If a geolocation has several observations, the one from the
-        sample's own sampling_log is preferred, then the most recent.'''
+        lookup_cols = {r[0] for r in pg_session_C._Execute_search_all_sql(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'landscape_utility' AND table_name = %s;",
+            (lookup,))}
+
+        return {'value_column': value_cols[0], 'lookup_table': lookup,
+                'hierarchical': {'parent_%s_id' % lookup, 'class_rank_id'} <= lookup_cols,
+                'label_columns': [c for c in ('tag', 'display_name', 'alias') if c in lookup_cols]}
+
+    def _Retrieve_class_rank_id(self, rank, pg_session_C):
+        '''Return the id of a class rank (order, family, genus) by name or alias, or None.'''
+
+        rec = pg_session_C._Execute_search_single_sql(
+            'SELECT id FROM landscape_utility.class_rank WHERE name = %s OR alias = %s;', (rank, rank))
+
+        return rec[0] if rec else None
+
+    def _Retrieve_landscape_for_scope(self, scope_D, name, landscape_D, rank_id, pg_session_C):
+        '''Return (sample_id, value, name, display_name, alias, rank) for a landscape covariate, joined to the
+        samples in scope by position (sample geolocation). value is the class tag (name if the class has no tag).
+
+        If a geolocation has several observations, the one from the sample's own sampling_log is preferred,
+        then the most recent. For a hierarchical classification the recorded class is rolled up through its
+        parents to rank_id (1 = order, 2 = family, 3 = genus); a class recorded at a coarser rank than rank_id
+        is kept as recorded. rank_id None keeps the rank recorded (lowest).'''
 
         scope_sql, params = self._Scope_sql(scope_D)
 
-        sql = 'SELECT DISTINCT ON (OS.id) OS.id, LU.name \
+        lookup = landscape_D['lookup_table']
+
+        label_cols = landscape_D['label_columns']
+
+        sql_D = {'table': pgsql_quote_col('%s_observation' % name), 'lookup': pgsql_quote_col(lookup),
+                 'col': pgsql_quote_col(landscape_D['value_column']), 'scope': scope_sql,
+                 'parent': pgsql_quote_col('parent_%s_id' % lookup),
+                 'value': 'COALESCE(LU.tag, LU.name)' if 'tag' in label_cols else 'LU.name',
+                 'display': 'LU.display_name' if 'display_name' in label_cols else 'NULL',
+                 'alias': 'LU.alias' if 'alias' in label_cols else 'NULL'}
+
+        observed = 'SELECT DISTINCT ON (OS.id) OS.id AS sample_id, LO.%(col)s AS class_id \
             FROM observation.sample AS OS \
             INNER JOIN observation.sample_geotag AS OSGT ON OSGT.sample_id = OS.id \
             INNER JOIN landscape.%(table)s AS LO ON LO.geolocation_id = OSGT.geolocation_id \
             INNER JOIN observation.observation_log AS OOL ON OOL.id = LO.observation_log_id \
-            INNER JOIN landscape_utility.%(lookup)s AS LU ON LU.id = LO.%(col)s \
             WHERE OS.id IN (%(scope)s) \
-            ORDER BY OS.id, (OOL.sampling_log_id = OS.sampling_log_id) DESC, LO.observed_at DESC;' % {
-                'table': pgsql_quote_col('%s_observation' % name), 'lookup': pgsql_quote_col(lookup_table),
-                'col': pgsql_quote_col(value_column), 'scope': scope_sql}
+            ORDER BY OS.id, (OOL.sampling_log_id = OS.sampling_log_id) DESC, LO.observed_at DESC' % sql_D
 
-        return pg_session_C._Execute_search_all_sql(sql, params) or []
+        sql_D['observed'] = observed
+
+        if not landscape_D['hierarchical']:
+
+            sql = 'WITH obs AS (%(observed)s) \
+                SELECT obs.sample_id, %(value)s, LU.name, %(display)s, %(alias)s, NULL \
+                FROM obs INNER JOIN landscape_utility.%(lookup)s AS LU ON LU.id = obs.class_id;' % sql_D
+
+            return pg_session_C._Execute_search_all_sql(sql, params) or []
+
+        # Climb from the recorded class while it is finer than the requested rank; the coarsest node
+        # reached per sample is the class at (or above, if not recorded that fine) the requested rank
+        sql = 'WITH RECURSIVE obs AS (%(observed)s), \
+            chain AS ( \
+                SELECT obs.sample_id, obs.class_id AS node_id FROM obs \
+                UNION ALL \
+                SELECT C.sample_id, LU.%(parent)s FROM chain AS C \
+                INNER JOIN landscape_utility.%(lookup)s AS LU ON LU.id = C.node_id \
+                WHERE LU.%(parent)s IS NOT NULL AND LU.class_rank_id > %%s) \
+            SELECT DISTINCT ON (C.sample_id) C.sample_id, %(value)s, LU.name, %(display)s, %(alias)s, LCR.name \
+            FROM chain AS C \
+            INNER JOIN landscape_utility.%(lookup)s AS LU ON LU.id = C.node_id \
+            LEFT JOIN landscape_utility.class_rank AS LCR ON LCR.id = LU.class_rank_id \
+            ORDER BY C.sample_id, LU.class_rank_id;' % sql_D
+
+        return pg_session_C._Execute_search_all_sql(sql, params + [rank_id if rank_id else 99]) or []
 
     def _Retrieve_observation_id_from_observationOLD(self, query_D):
 

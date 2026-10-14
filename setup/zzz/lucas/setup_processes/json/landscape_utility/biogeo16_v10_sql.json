@@ -48,6 +48,22 @@
               }
             },
             {
+              "parameter": "tag",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Short unique label for the biogeographic region, used as class value in selected data and plots.",
+              "schema_table": {
+                "schema": "landscape_utility",
+                "table": "biogeo16",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              }
+            },
+            {
               "parameter": "display_name",
               "parameter_type": "text",
               "required": true,

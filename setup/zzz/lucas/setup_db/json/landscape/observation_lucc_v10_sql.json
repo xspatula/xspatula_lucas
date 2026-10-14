@@ -11,7 +11,7 @@
           "id SERIAL",
           "observation_log_id INTEGER REFERENCES observation.observation_log (id)",
           "geolocation_id INTEGER REFERENCES observation.geolocation (id)",
-          "landuse_genus_id INTEGER REFERENCES landscape_utility.landuse_genus (id)",
+          "landuse_id INTEGER REFERENCES landscape_utility.landuse (id)",
           "observed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
           "UNIQUE (geolocation_id, observed_at)",
           "PRIMARY KEY (id)"
@@ -34,7 +34,7 @@
           "id SERIAL",
           "observation_log_id INTEGER REFERENCES observation.observation_log (id)",
           "geolocation_id INTEGER REFERENCES observation.geolocation (id)",
-          "landcover_genus_id INTEGER REFERENCES landscape_utility.landcover_genus (id)",
+          "landcover_id INTEGER REFERENCES landscape_utility.landcover (id)",
           "observed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
           "UNIQUE (geolocation_id, observed_at)",
           "PRIMARY KEY (id)"

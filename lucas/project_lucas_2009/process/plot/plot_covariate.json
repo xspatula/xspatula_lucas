@@ -9,6 +9,7 @@
           "landuse",
           "biogeo16"
         ],
+        "class_label": "display_name",
         "targetfeaturesymbols": "default",
         "standardisation": "default",
         "transformation": "default",

@@ -395,6 +395,29 @@ class Process_plot(Get_schema_table):
 
         return counts
 
+    def _Relabel_classes(self, df, nominal, params_D, class_label):
+        '''Return df with the nominal class values (tags) shown as class_label: tag, display_name, name or alias.
+
+        The lookup is the class_labels of the selection params JSON; values without a lookup (older
+        selections, nominal indicators) are shown as stored.
+        '''
+        lookup_D = (params_D or {}).get('class_labels', {})
+
+        if class_label == 'tag' or not lookup_D:
+            return df
+
+        df = df.copy()
+
+        for name in nominal:
+
+            classes_D = lookup_D.get(name, {})
+
+            mapping = {tag: info.get(class_label) or tag for tag, info in classes_D.items()}
+
+            df[name] = df[name].map(lambda v: mapping.get(v, v))
+
+        return df
+
     def _Class_bar_axes(self, ax, counts, label, style, fontsize):
         '''Draw class counts as horizontal bars (largest on top) on ax.'''
 
@@ -419,8 +442,14 @@ class Process_plot(Get_schema_table):
                 fontsize=fontsize, ha='right', va='bottom', color='gray')
 
     def _Class_bar_plot(self, df, covariates, symbols, max_classes, show, save, plot_dir,
-                        individual_canvas_plot=True, single_canvas_plot=False):
-        '''Plot class counts for each nominal covariate — individual canvases then a grid canvas.'''
+                        individual_canvas_plot=True, single_canvas_plot=False, ranks_D=None):
+        '''Plot class counts for each nominal covariate — individual canvases then a grid canvas.
+        ranks_D: {covariate: rank} of hierarchical covariates, added to the title unless lowest.'''
+
+        def _Title(name):
+            rank = (ranks_D or {}).get(name, 'lowest')
+            label = self._Get_symbol(symbols, name)[1]
+            return label if rank == 'lowest' else '%s (%s)' % (label, rank)
 
         if individual_canvas_plot:
 
@@ -430,8 +459,7 @@ class Process_plot(Get_schema_table):
 
                 fig, ax = plt.subplots(figsize=(7, 0.3 * max(len(counts), 5) + 1.5))
 
-                self._Class_bar_axes(ax, counts, self._Get_symbol(symbols, name)[1],
-                                     self._Class_style(symbols, name), 8)
+                self._Class_bar_axes(ax, counts, _Title(name), self._Class_style(symbols, name), 8)
 
                 fig.tight_layout()
 
@@ -462,8 +490,7 @@ class Process_plot(Get_schema_table):
 
             for f, (name, counts) in enumerate(zip(covariates, all_counts)):
 
-                self._Class_bar_axes(axs_flat[f], counts, self._Get_symbol(symbols, name)[1],
-                                     self._Class_style(symbols, name), 7)
+                self._Class_bar_axes(axs_flat[f], counts, _Title(name), self._Class_style(symbols, name), 7)
 
             for idx in range(len(covariates), len(axs_flat)):
                 axs_flat[idx].set_visible(False)
@@ -666,8 +693,17 @@ class Process_plot(Get_schema_table):
         applied_units_D = params_D.get('indicator_units', {}) if params_D else {}
 
         if nominal and (do_histogram or do_boxplot):
-            self._Class_bar_plot(df, nominal, symbols, getattr(p, 'max_classes', 15), show, save, plot_dir,
-                                 individual_canvas_plot, single_canvas_plot)
+            class_label = (getattr(p, 'class_label', 'display_name') or 'display_name').strip().lower()
+
+            if class_label not in ('tag', 'display_name', 'name', 'alias'):
+
+                print('    ⚠️  Unknown class_label "%s" (tag, display_name, name or alias); using display_name' % class_label)
+
+                class_label = 'display_name'
+
+            self._Class_bar_plot(self._Relabel_classes(df, nominal, params_D, class_label), nominal, symbols,
+                                 getattr(p, 'max_classes', 15), show, save, plot_dir,
+                                 individual_canvas_plot, single_canvas_plot, (params_D or {}).get('covariate_rank'))
 
         if not indicators:
             return

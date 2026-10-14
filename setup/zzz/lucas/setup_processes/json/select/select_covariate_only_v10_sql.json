@@ -109,6 +109,18 @@
               }
             },
             {
+              "parameter": "covariate_rank",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "lowest",
+              "hint": "Rank for hierarchical class covariates (land cover, land use): order, family, genus or lowest (the rank recorded). One rank for all, or JSON per covariate, e.g. {\"landcover\": \"family\", \"landuse\": \"order\"}",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "indicator",
+                "write": false
+              }
+            },
+            {
               "parameter": "data_range",
               "parameter_type": "text",
               "required": false,

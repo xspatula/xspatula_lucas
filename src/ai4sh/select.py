@@ -200,6 +200,32 @@ class Process_select(Get_schema_table):
 
             return {}
 
+    def _Covariate_rank(self, label):
+        '''Return the requested rank (order, family, genus or lowest) for a hierarchical class covariate.
+
+        covariate_rank is either one rank for all covariates ("family") or JSON per covariate
+        ({"landcover": "family", "landuse": "order"}); covariates not listed keep the rank recorded (lowest).
+        '''
+        raw = getattr(self.process_S.process.parameters, 'covariate_rank', '') or 'lowest'
+
+        if isinstance(raw, dict):
+            rank = raw.get(label, 'lowest')
+
+        elif str(raw).strip().startswith('{'):
+
+            try:
+                rank = json.loads(raw).get(label, 'lowest')
+
+            except json.JSONDecodeError as e:
+
+                print('    ⚠️  Could not parse covariate_rank JSON: %s' % e)
+
+                rank = 'lowest'
+        else:
+            rank = raw
+
+        return str(rank).strip().lower() or 'lowest'
+
     def _Param(self, parameter, default=''):
         '''Return a process parameter as stripped text, default if missing or empty.'''
 
@@ -316,8 +342,24 @@ class Process_select(Get_schema_table):
 
             if landscape:
 
-                features.append({'label': label, 'kind': 'landscape', 'id': None, 'alias': label,
-                                 'value_column': landscape[0], 'lookup_table': landscape[1]})
+                rank = self._Covariate_rank(label) if landscape['hierarchical'] else 'lowest'
+
+                rank_id = None
+
+                if rank != 'lowest':
+
+                    rank_id = self.pg_ai4sh_C._Retrieve_class_rank_id(rank, self.pg_session_C)
+
+                    if rank_id is None:
+
+                        print('    ⚠️  Unknown covariate_rank "%s" for %s; using the rank recorded' % (rank, label))
+
+                        rank = 'lowest'
+
+                # The rank is part of the output name (landcover.family), not of the column name
+                features.append({'label': label, 'kind': 'landscape', 'id': None,
+                                 'alias': label if rank == 'lowest' else '%s.%s' % (label, rank),
+                                 'landscape': landscape, 'rank': rank, 'rank_id': rank_id})
 
                 continue
 
@@ -700,13 +742,28 @@ class Process_select(Get_schema_table):
         for f in [f for f in features if f['kind'] == 'landscape']:
 
             recs = self.pg_ai4sh_C._Retrieve_landscape_for_scope(
-                scope_D, f['label'], f['value_column'], f['lookup_table'], self.pg_session_C)
+                scope_D, f['label'], f['landscape'], f['rank_id'], self.pg_session_C)
 
             if recs:
 
-                frames.append(pd.DataFrame(recs, columns=['sample_id', f['label']]).set_index('sample_id'))
+                frames.append(pd.DataFrame([r[:2] for r in recs], columns=['sample_id', f['label']]).set_index('sample_id'))
 
                 units_D[f['label']] = 'class'
+
+                # Lookup from the class value (tag) to its name, display_name, alias and rank, for plotting
+                self.class_labels_D[f['label']] = {r[1]: {'name': r[2], 'display_name': r[3], 'alias': r[4], 'rank': r[5]}
+                                                   for r in recs}
+
+                if f['rank'] != 'lowest':
+
+                    order = ('order', 'family', 'genus')
+
+                    coarser = sum(1 for r in recs if r[5] in order and order.index(r[5]) < order.index(f['rank']))
+
+                    if coarser:
+
+                        print('    ⚠️  %s: %d of %d samples recorded at a coarser rank than %s, kept as recorded'
+                              % (f['label'], coarser, len(recs), f['rank']))
 
         if not frames:
 
@@ -771,6 +828,8 @@ class Process_select(Get_schema_table):
         range filters and save as Parquet + params JSON. role: spectra, indicator, covariate or all.'''
 
         p = self.process_S.process.parameters
+
+        self.class_labels_D = {}
 
         # ---- 1. Resolve what to select ----
         scope_D = self._Resolve_scope()
@@ -967,6 +1026,8 @@ class Process_select(Get_schema_table):
             'max_profile': int(p.max_profile),
             'indicator_array': feature_labels_D.get('indicator', []),
             'covariate_array': feature_labels_D.get('covariate', []),
+            'covariate_rank': {f['label']: f['rank'] for f in covariates if f['kind'] == 'landscape'},
+            'class_labels': {k: v for k, v in self.class_labels_D.items() if k in df.columns},
             'indicator_units': {k: v for k, v in units_D.items() if k not in wl_col_names},
             'data_range': data_range,
             'output_name': output_name,
@@ -1106,7 +1167,7 @@ class Process_select(Get_schema_table):
 
                     params_D[key] = params_D.get(key, []) + [v for v in value if v not in params_D.get(key, [])]
 
-                elif key == 'indicator_units':
+                elif key in ('indicator_units', 'covariate_rank', 'class_labels'):
 
                     params_D.setdefault(key, {}).update(value)
 

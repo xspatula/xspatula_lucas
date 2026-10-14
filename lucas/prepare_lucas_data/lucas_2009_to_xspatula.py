@@ -695,7 +695,7 @@ def step8_land_cover(main_records):
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             #"provision_id__provision_name": LANDSCAPE_PROVISION,
-            "landcover_genus_id__landcover_genus_name": code,
+            "landcover_id__landcover_name": code,
         }
         if date_value:
             params["observed_at"] = date_to_iso8601(date_value)
@@ -733,7 +733,7 @@ def step9_land_use(main_records):
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             #"provision_id__provision_name": LANDSCAPE_PROVISION,
-            "landuse_genus_id__landuse_genus_name": code,
+            "landuse_id__landuse_name": code,
         }
         if date_value:
             params["observed_at"] = date_to_iso8601(date_value)

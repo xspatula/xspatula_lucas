@@ -53,6 +53,13 @@
               "hint": "Max number of classes shown per nominal covariate; the remaining classes are summed as other"
             },
             {
+              "parameter": "class_label",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "display_name",
+              "hint": "Label of class covariates (land cover, land use, biogeo16) in plots: display_name, tag, name or alias"
+            },
+            {
               "parameter": "targetfeaturesymbols",
               "parameter_type": "text",
               "required": false,

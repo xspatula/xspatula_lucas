@@ -14,6 +14,7 @@
           "landuse",
           "biogeo16"
         ],
+        "covariate_rank": "order",
         "output_root_fp": "./project_lucas_2009/data"
       }
     }

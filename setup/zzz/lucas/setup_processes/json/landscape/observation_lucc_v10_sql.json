@@ -48,7 +48,7 @@
               }
             },
             {
-              "parameter": "landcover_genus_id__landcover_genus_name",
+              "parameter": "landcover_id__landcover_name",
               "parameter_type": "text",
               "required": true,
               "default_value": "",
@@ -131,7 +131,7 @@
               }
             },
             {
-              "parameter": "landuse_genus_id__landuse_genus_name",
+              "parameter": "landuse_id__landuse_name",
               "parameter_type": "text",
               "required": true,
               "default_value": "",

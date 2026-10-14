@@ -532,7 +532,7 @@ def step8_land_cover(records):
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             #"provision_id__provision_name": LANDSCAPE_PROVISION,
-            "landcover_genus_id__landcover_genus_name": code,
+            "landcover_id__landcover_name": code,
             "observed_at": DEFAULT_OBSERVED_AT,
         }
         filename = f"{SAMPLING_LOG_TAG}_{point_id}_land_cover.json"
@@ -563,7 +563,7 @@ def step9_land_use(records):
             "observation_log_id__observation_log_name": LANDSCAPE_OBSERVATION_LOG_NAME,
             "geolocation_id__geolocation_name": geolocation_name(iso_country, point_id),
             #"provision_id__provision_name": LANDSCAPE_PROVISION,
-            "landuse_genus_id__landuse_genus_name": code,
+            "landuse_id__landuse_name": code,
             "observed_at": DEFAULT_OBSERVED_AT,
         }
         filename = f"{SAMPLING_LOG_TAG}_{point_id}_land_use.json"

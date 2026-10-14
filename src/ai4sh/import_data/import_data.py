@@ -36,20 +36,14 @@ NO_LOWER_COLS = frozenset({
 # Define classfication levels for substances
 CLASSIFICATION_TABLE_D  = {'manage_order':['manage_family','manage_genus','manage_species'], 
                            'manage_family':['manage_genus','manage_species'], 
-                           'manage_genus':['manage_species'],
-                           'manage_landcover_order':['manage_landcover_family','manage_landcover_genus'],
-                           'manage_landcover_family':['manage_landcover_genus'],
-                           'manage_landuse_order':['manage_landuse_family','manage_landuse_genus'],
-                           'manage_landuse_family':['manage_landuse_genus']
+                           'manage_genus':['manage_species']
                            }
 
 CLASSIFICATION_CHILDREN_D = { 'manage_family': {'table': 'family', 'parent_id_name': 'order_id__order_name'},
                             'manage_genus': {'table': 'genus', 'parent_id_name': 'family_id__family_name'},
-                            'manage_species': {'table': 'species', 'parent_id_name': 'genus_id__genus_name'},
-                            'manage_landcover_family': {'table': 'landcover_family', 'parent_id_name': 'landcover_order_id__landcover_order_name'},
-                            'manage_landcover_genus': {'table': 'landcover_genus', 'parent_id_name': 'landcover_family_id__landcover_family_name'},
-                            'manage_landuse_family': {'table': 'landuse_family', 'parent_id_name': 'landuse_order_id__landuse_order_name'},
-                            'manage_landuse_genus': {'table': 'landuse_genus', 'parent_id_name': 'landuse_family_id__landuse_family_name'}}
+                            'manage_species': {'table': 'species', 'parent_id_name': 'genus_id__genus_name'}}
+# Land cover and land use are single tables with a parent class and a class rank (as taxon); a class is
+# recorded once at its own rank and observations reference it at whatever rank was recorded
 
 SPECIAL_SEARCH_TABLES_D = {'observation.campaign': '_Retrieve_dataset_alias',
                            'observation.observation': '_Retrieve_sample_id_from_observation_log',
