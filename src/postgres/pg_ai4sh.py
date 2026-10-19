@@ -2,6 +2,7 @@
 import re
 
 # Application package imports
+from src.ai4sh.project_paths import PROJECT_FOLDER
 
 
 
@@ -413,12 +414,12 @@ class PG_manage_AI4SH:
 
             raise Exception(
                 'Missing unit translation: "%s" -> "%s".\n'
-                '    Add a row to lucas/import_data/utility/observation/excel/unit_translate.xlsx:\n'
+                '    Add a row to %s/import_data/utility/observation/excel/unit_translate.xlsx:\n'
                 '      src_unit_id__unit_name = %s\n'
                 '      dst_unit_id__unit_name = %s\n'
                 '    You must determine factor, addon, exponent, process yourself.\n'
-                '    Then re-run lucas/import_data/insert_lucas_data.ipynb cell 1.2 to load it into the database.'
-                % (src_unit_name, dst_unit_name, src_unit_name, dst_unit_name))
+                '    Then re-run the utility data import (notebook in %s/import_data/) to load it into the database.'
+                % (src_unit_name, dst_unit_name, PROJECT_FOLDER, src_unit_name, dst_unit_name, PROJECT_FOLDER))
 
         factor, addon, exponent, process = trans
 

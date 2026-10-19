@@ -53,15 +53,11 @@ from src.ai4sh.machine_learning_preprocess import (
 )
 from src.ai4sh.parquet_units import Read_parquet_with_units
 from src.ai4sh.spectral_columns import Signal_type_of
+from src.ai4sh.project_paths import Default_fpn
 
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-
-_DEFAULT_MODEL_PARAMS_FP = os.path.join(
-    _REPO_ROOT, 'lucas', 'default', 'regressors', 'regression_model_parameters.json')
-_DEFAULT_REGR_SYMBOLS_FP = os.path.join(
-    _REPO_ROOT, 'lucas', 'default', 'plot', 'regressionmodelsymbols.json')
-_DEFAULT_TARGET_SYMBOLS_FP = os.path.join(
-    _REPO_ROOT, 'lucas', 'default', 'plot', 'targetfeaturesymbols.json')
+_DEFAULT_MODEL_PARAMS_FP = Default_fpn('regressors', 'regression_model_parameters.json')
+_DEFAULT_REGR_SYMBOLS_FP = Default_fpn('plot', 'regressionmodelsymbols.json')
+_DEFAULT_TARGET_SYMBOLS_FP = Default_fpn('plot', 'targetfeaturesymbols.json')
 
 
 # ------------------------------------------------------------------ model registry

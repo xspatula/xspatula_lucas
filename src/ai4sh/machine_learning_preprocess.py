@@ -37,8 +37,7 @@ from src.ai4sh.spectral_columns import (Band_col_name, Band_value, Is_band_col,
 
 from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
-
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+from src.ai4sh.project_paths import Default_fpn
 
 _METADATA_COLS = frozenset([
     'sample_id', 'sample_name', 'campaign_tag', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
@@ -1678,8 +1677,7 @@ class Process_ml_preprocess(Get_schema_table):
             print('    WARNING: model_parameters file not found: %s' % mp_fp)
 
         # Selector defaults
-        sel_defaults_fp = os.path.join(
-            _REPO_ROOT, 'lucas', 'default', 'selector', 'selector_default_settings.json')
+        sel_defaults_fp = Default_fpn('selector', 'selector_default_settings.json')
         sel_defaults = {}
         if os.path.exists(sel_defaults_fp):
             with open(sel_defaults_fp) as fh:

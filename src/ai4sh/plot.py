@@ -168,7 +168,7 @@ class Process_plot(Get_schema_table):
     def _Load_feature_symbols(self):
         '''Load targetfeaturesymbols JSON. Returns the inner dict keyed by indicator name.
 
-        "default" → loads from lucas/default/plot/targetfeaturesymbols.json.
+        "default" → loads from <project>/default/plot/targetfeaturesymbols.json.
         Any other value is treated as a file path.
         '''
         raw = getattr(self.process_S.process.parameters, 'targetfeaturesymbols', 'default')
