@@ -30,6 +30,9 @@ the number of samples per indicator and spectra provision for a scope and filter
 Output paths are built from tags (see _Ml_output_paths):
 
     {output_root_fp}/{output_sub_fp}/{output_name}.parquet (+ {output_name}.json)
+
+Every saved Parquet file is registered as the previous dataframe of its directory (.previous_dataframe,
+see src/ai4sh/previous_dataframe.py), so the next process can read it with an empty parquet_file.
 '''
 
 # Standard library imports
@@ -54,6 +57,8 @@ from src.utils.json_read_write import Dump_json
 from src.ai4sh.feature_symbols import Load_target_units
 
 from src.ai4sh.parquet_units import Save_parquet_with_units, Read_parquet_with_units
+
+from src.ai4sh.previous_dataframe import Register_parquet
 
 from src.ai4sh.spectral_columns import Band_col_name, Normalize_signal_type, Set_signal_type, DEFAULT_SIGNAL_TYPE
 
@@ -1385,6 +1390,14 @@ class Process_select(Get_schema_table):
 
         Dump_json(params_fpn, params_D, verbose=self.verbose)
 
+        # The selection becomes the previous dataframe of its directory (read when parquet_file is empty)
+        note = '%s: %d samples' % (role, len(df))
+
+        if scope_D['sample_filter']:
+            note += ', filter %s' % scope_D['sample_filter']
+
+        Register_parquet(data_fpn, self.process_S.process.process, note)
+
         print('    Saved %d samples → %s' % (len(df), data_fpn))
 
     # ------------------------------------------------------------------
@@ -1531,6 +1544,9 @@ class Process_select(Get_schema_table):
         Save_parquet_with_units(df.reset_index(drop=True), data_fpn, units_D)
 
         Dump_json(params_fpn, params_D, verbose=self.verbose)
+
+        Register_parquet(data_fpn, 'compile_dataset', 'compiled: %d samples from %s' % (
+            len(df), ', '.join(i['file'] for i in inputs_L)))
 
         print('    Compiled %d samples (inputs: %s) → %s' % (
             len(df), ', '.join(str(i['n_samples']) for i in inputs_L), data_fpn))
