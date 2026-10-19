@@ -118,3 +118,8 @@ setup/zzz/lucas/setup_processes/json/organism_utlity/
 
 # LibreOffice lock files
 .~lock.*#
+
+# =============================================================
+# Development data
+# =============================================================
+notes/
