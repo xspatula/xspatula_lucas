@@ -1,0 +1,23 @@
+{
+  "process": [
+    {
+      "process": "select_spectra_only",
+      "overwrite": false,
+      "parameters": {
+        "dataset": "lucas",
+        "campaign": "",
+        "sampling_log": "lucas_eu_2009",
+        "min_profile": 0,
+        "max_profile": 20,
+        "spectra_provision": "foss-xds-rca",
+        "spectra_preparation_name": "ds2",
+        "begin_wavelength": 400,
+        "end_wavelength": 2500,
+        "output_bandwidth": 10,
+        "output_spectra_signal": "absorb",
+        "output_root_fp": "./project_lucas_2009/data",
+        "sample_source": "./project_lucas_2009/data/indicator/lucas_eu_2009/cec-clay-silt-sand-c-org-n-tot-ph-water_0-20__lc-cropland-grassland"
+      }
+    }
+  ]
+}

@@ -49,7 +49,7 @@ from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
 from src.ai4sh.machine_learning_preprocess import (
     _resolve_input_parquet, _resolve_single_previous, _load_companion_json,
-    _is_spectral_col, _col_to_index, _parse_array_param, _METADATA_COLS,
+    _is_spectral_col, _col_to_index, _parse_array_param, _is_metadata_col,
 )
 from src.ai4sh.parquet_units import Read_parquet_with_units
 from src.ai4sh.spectral_columns import Signal_type_of
@@ -359,7 +359,7 @@ class Process_regression_model(Get_schema_table):
 
         all_indicators = [
             c for c in df.columns
-            if c not in _METADATA_COLS
+            if not _is_metadata_col(c)
             and not _is_spectral_col(c)
             and pd.api.types.is_numeric_dtype(df[c])
         ]

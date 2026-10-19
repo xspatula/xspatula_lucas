@@ -38,9 +38,14 @@ from src.lib.pilot import Get_project_path
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
 _METADATA_COLS = frozenset([
-    'sample_id', 'sample_name', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
+    'sample_id', 'sample_name', 'campaign_tag', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
     'profile_min', 'profile_max',
 ])
+
+
+def _is_metadata_col(col):
+    '''True for key columns and the class columns (class_<filter>) of a class filtered selection.'''
+    return col in _METADATA_COLS or col.startswith('class_')
 
 
 def _build_detector(name, threshold):
@@ -568,7 +573,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         all_indicators = [
             c for c in df.columns
-            if c not in _METADATA_COLS
+            if not _is_metadata_col(c)
             and not _is_spectral_col(c)
             and pd.api.types.is_numeric_dtype(df[c])
         ]
@@ -1507,7 +1512,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         all_indicators = [
             c for c in df.columns
-            if c not in _METADATA_COLS
+            if not _is_metadata_col(c)
             and not _is_spectral_col(c)
             and pd.api.types.is_numeric_dtype(df[c])
         ]
@@ -1738,7 +1743,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         all_indicators = [
             c for c in df.columns
-            if c not in _METADATA_COLS
+            if not _is_metadata_col(c)
             and not _is_spectral_col(c)
             and pd.api.types.is_numeric_dtype(df[c])
         ]
