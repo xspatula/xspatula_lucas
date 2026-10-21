@@ -38,6 +38,7 @@ from src.ai4sh.spectral_columns import (Band_col_name, Band_value, Is_band_col,
 from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
 from src.ai4sh.project_paths import Default_fpn
+from src.ai4sh.provenance import Load_config_json
 
 _METADATA_COLS = frozenset([
     'sample_id', 'sample_name', 'campaign_tag', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
@@ -1082,8 +1083,7 @@ class Process_ml_preprocess(Get_schema_table):
             print('    ERROR: filter file not found: %s' % filter_fp)
             return
 
-        with open(filter_fp) as fh:
-            filter_cfg = json.load(fh)
+        filter_cfg = Load_config_json(filter_fp)
 
         # Abbreviation from top-level key
         _abbrev_map = {'savitzky-golay': 'sg', 'gauss': 'gf',
@@ -1166,8 +1166,7 @@ class Process_ml_preprocess(Get_schema_table):
             print('    ERROR: multi-filter file not found: %s' % mf_fp)
             return
 
-        with open(mf_fp) as fh:
-            mf_cfg = json.load(fh)
+        mf_cfg = Load_config_json(mf_fp)
 
         dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
         show            = getattr(p, 'show', True)
@@ -1276,8 +1275,7 @@ class Process_ml_preprocess(Get_schema_table):
             print('    ERROR: ward clustering file not found: %s' % wc_fp)
             return
 
-        with open(wc_fp) as fh:
-            cfg = json.load(fh)
+        cfg = Load_config_json(wc_fp)
         wc = cfg.get('ward_clustering', cfg)
 
         dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
@@ -1448,8 +1446,7 @@ class Process_ml_preprocess(Get_schema_table):
             print('    ERROR: univariate selector file not found: %s' % uv_fp)
             return
 
-        with open(uv_fp) as fh:
-            cfg = json.load(fh)
+        cfg = Load_config_json(uv_fp)
 
         n_features          = int(cfg.get('SelectKBest', {}).get('n_features', 20))
         dataframe_param     = str(getattr(p, 'dataframe', 'raw')).strip()
@@ -1671,8 +1668,7 @@ class Process_ml_preprocess(Get_schema_table):
             mp_fp = _DEFAULT_MODEL_PARAMS_FP
         model_params = {}
         if os.path.exists(mp_fp):
-            with open(mp_fp) as fh:
-                model_params = json.load(fh)
+            model_params = Load_config_json(mp_fp)
         elif self.verbose >= 1:
             print('    WARNING: model_parameters file not found: %s' % mp_fp)
 
@@ -1680,8 +1676,7 @@ class Process_ml_preprocess(Get_schema_table):
         sel_defaults_fp = Default_fpn('selector', 'selector_default_settings.json')
         sel_defaults = {}
         if os.path.exists(sel_defaults_fp):
-            with open(sel_defaults_fp) as fh:
-                sel_defaults = json.load(fh)
+            sel_defaults = Load_config_json(sel_defaults_fp)
         perm_repeats = int(sel_defaults.get('permutation_selector', {}).get('permutation_repeats', 6))
         rfe_cv       = int(sel_defaults.get('rfe', {}).get('CV', 0))
         rfe_step     = int(sel_defaults.get('rfe', {}).get('step', 1))
@@ -2176,8 +2171,9 @@ class Process_ml_preprocess(Get_schema_table):
         # Build chain abbreviation and step_info_list from all steps except 'raw'
         chain_abbrevs  = []
         step_info_list = []
+        chem_config    = _load_chemometric_config(chemometrics_param, self.verbose)
         for step_name_key in chemometrics_array:
-            cfg = _load_chemometric_config(chemometrics_param, step_name_key)
+            cfg = chem_config.get(step_name_key, {})
             if step_name_key == 'derivative':
                 d = int(cfg.get('derivative', cfg.get('derive', 1)))
                 a = bool(cfg.get('append', False))

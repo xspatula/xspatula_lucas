@@ -18,6 +18,8 @@ from src.ai4sh.machine_learning_model import Process_regression_model
 
 from src.ai4sh.pandas_df_management import Process_pandas
 
+from src.ai4sh.provenance import Begin_provenance
+
 from src.lib.login import Get_set_database_session
 
 from src.utils import Log, Today_as_str_YYYYMMDD
@@ -68,6 +70,8 @@ def Run_process(structured_process_D, scheme_params_D):
                 continue
         
             root_process = process_S.process.root_process
+
+            Begin_provenance(process_S, key)
 
             if process_S.process.verbose > 0:
 

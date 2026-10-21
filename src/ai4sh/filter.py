@@ -12,6 +12,7 @@ from scipy.ndimage import convolve1d, gaussian_filter1d
 from scipy.signal import savgol_filter
 
 from src.ai4sh.project_paths import Default_fpn
+from src.ai4sh.provenance import Load_config_json
 
 _DEFAULT_FILTER_DIR = Path(Default_fpn('filter'))
 
@@ -37,8 +38,7 @@ def _load_filter_config(param):
         fp = _DEFAULT_FILTER_DIR / _FILTER_DEFAULT_FILES[name]
     else:
         fp = Path(param)
-    with open(fp) as fh:
-        return json.load(fh)
+    return Load_config_json(fp)
 
 
 def _lowess_1d(y, n_points):

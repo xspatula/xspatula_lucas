@@ -12,6 +12,7 @@ before saving a Parquet subset) and src/ai4sh/plot.py (to label plot axes).
 import os
 import json
 from src.ai4sh.project_paths import Default_fpn
+from src.ai4sh.provenance import Load_config_json
 
 DEFAULT_SYMBOLS_FPN = Default_fpn('plot', 'targetfeaturesymbols.json')
 
@@ -31,8 +32,7 @@ def Load_feature_symbols(raw='default', verbose=0):
             print('    Warning: targetfeaturesymbols file not found: %s — using fallback labels.' % fpn)
         return {}
 
-    with open(fpn) as f:
-        data = json.load(f)
+    data = Load_config_json(fpn)
 
     return data.get('targetFeatureSymbols', {})
 

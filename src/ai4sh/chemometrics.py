@@ -13,6 +13,7 @@ from scipy.stats import boxcox
 from sklearn.preprocessing import PowerTransformer, QuantileTransformer, StandardScaler, normalize
 from sklearn.decomposition import PCA
 from src.ai4sh.project_paths import Default_fpn
+from src.ai4sh.provenance import Load_config_json
 
 _DEFAULT_STANDARDISE_FPN = Default_fpn('transform', 'indicator_standardise_default.json')
 
@@ -29,8 +30,7 @@ def _load_transform_config(param, default_fpn, verbose):
         if verbose >= 1:
             print('    Warning: transform config not found: %s' % fpn)
         return None
-    with open(fpn) as f:
-        return json.load(f)
+    return Load_config_json(fpn)
 
 
 def _load_chemometric_config(param, verbose=0):
@@ -41,8 +41,7 @@ def _load_chemometric_config(param, verbose=0):
         if verbose >= 1:
             print('    Warning: chemometric config not found: %s' % fpn)
         return {}
-    with open(fpn) as f:
-        return json.load(f)
+    return Load_config_json(fpn)
 
 
 def _snv(X):
@@ -199,7 +198,7 @@ def apply_derivative(df, columns, cfg):
     Columns must be numeric wavelengths (int) or 'd<int>' strings from a prior derivative step.
     Returns (df_out, columns_out, label).
     '''
-    derive = int(cfg.get('derive', 1))
+    derive = int(cfg.get('derivative', cfg.get('derive', 1)))
     if derive == 0:
         return df[columns].copy(), list(columns), 'raw'
 
@@ -308,7 +307,7 @@ def apply_decomposition(df, columns, cfg):
 
 
 _CHEMOMETRIC_FUNCS = {
-    'derivative': (apply_derivative, 'derivatives'),
+    'derivative': (apply_derivative, 'derivative'),
     'scatter_correction': (apply_scatter_correction, 'scatter_correction'),
     'scaling': (apply_scaling, 'scaling'),
     'decomposition': (apply_decomposition, 'decomposition'),

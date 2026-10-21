@@ -54,6 +54,7 @@ from src.ai4sh.machine_learning_preprocess import (
 from src.ai4sh.parquet_units import Read_parquet_with_units
 from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.project_paths import Default_fpn
+from src.ai4sh.provenance import Load_config_json, Provenance_snapshot
 
 _DEFAULT_MODEL_PARAMS_FP = Default_fpn('regressors', 'regression_model_parameters.json')
 _DEFAULT_REGR_SYMBOLS_FP = Default_fpn('plot', 'regressionmodelsymbols.json')
@@ -262,8 +263,7 @@ class Process_regression_model(Get_schema_table):
             if self.verbose >= 1:
                 print('    WARNING: %s file not found: %s' % (label, fp))
             return {}
-        with open(fp) as fh:
-            return json.load(fh)
+        return Load_config_json(fp)
 
     def _print_summary(self, results_D, indicator_cols, regressor_keys):
         modes = []
@@ -583,6 +583,7 @@ class Process_regression_model(Get_schema_table):
             'signal_type':         signal_type,
             'feature_columns':     col_names,
             'results':             results_D,
+            'provenance':          Provenance_snapshot(),
         }
         result_fp = os.path.join(project_root_fp, stem + '_regression.json')
         with open(result_fp, 'w') as fh:
