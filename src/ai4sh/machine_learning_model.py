@@ -38,9 +38,10 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+from sklearn.compose import TransformedTargetRegressor
 from sklearn.cross_decomposition import PLSRegression
-from sklearn.base import clone
-from sklearn.model_selection import train_test_split, cross_val_predict, cross_val_score
+from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.model_selection import cross_val_predict, cross_val_score
 from sklearn.inspection import permutation_importance as sk_permutation_importance
 from sklearn.metrics import (mean_squared_error, r2_score, mean_absolute_error,
                               mean_absolute_percentage_error, median_absolute_error)
@@ -51,7 +52,11 @@ from src.ai4sh.machine_learning_preprocess import (
     _resolve_input_parquet, _resolve_single_previous, _load_companion_json,
     _is_spectral_col, _col_to_index, _parse_array_param, _is_metadata_col,
 )
-from src.ai4sh.parquet_units import Read_parquet_with_units
+from src.ai4sh.parquet_units import Read_parquet_with_units, Find_selected_parquet
+from src.ai4sh.chemometrics import (_load_transform_config, _DEFAULT_TRANSFORMATION_FPN,
+                                     _DEFAULT_STANDARDISE_FPN)
+from src.ai4sh.ml_transformers import (Chain_to_steps, Column_index, Holdout_test_mask, IndicatorTransformer,
+                                       Indicator_target_settings, RegressorFrame, Target_domain_mask)
 from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.project_paths import Default_fpn
 from src.ai4sh.provenance import Load_config_json, Provenance_snapshot
@@ -236,6 +241,43 @@ def _save_permutation_data(pi_result, wavelengths, model_key, indicator, mode_la
     return out_fp
 
 
+# ------------------------------------------------------------------ fitted model helpers
+
+def _Fitted_target(model):
+    '''Fitted indicator transformation of a model (lambda, mean, std ...) as a JSON-ready dict.'''
+    if isinstance(model, TransformedTargetRegressor):
+        return model.transformer_.Describe()
+    return {'transform': 'linear', 'standardise': False}
+
+
+class _Fitted_tail(RegressorMixin, BaseEstimator):
+    '''The fitted regressor (+ inverse indicator transformation) of a model, applied to preprocessed features.
+
+    Feature and permutation importance are reported for the features that reach the regressor (bands, pc, wc),
+    in the native unit of the indicator.
+    '''
+
+    def __init__(self, model):
+        self.model = model
+        self.pipe = model.regressor_ if isinstance(model, TransformedTargetRegressor) else model
+        self.regressor = self.pipe[-1]
+
+    def Preprocess(self, X):
+        return self.pipe[:-2].transform(X)
+
+    def Features(self, X):
+        return [Column_index(c) for c in self.Preprocess(X.iloc[:2]).columns]
+
+    def fit(self, X, y=None):
+        return self
+
+    def predict(self, Xt):
+        pred = np.ravel(self.regressor.predict(self.pipe[-2].transform(Xt)))
+        if self.pipe is not self.model:
+            pred = self.model.transformer_.inverse_transform(pred.reshape(-1, 1)).ravel()
+        return pred
+
+
 # ------------------------------------------------------------------ main class
 
 class Process_regression_model(Get_schema_table):
@@ -257,6 +299,39 @@ class Process_regression_model(Get_schema_table):
         if os.path.isabs(s):
             return s
         return Get_project_path(self.project_root_FP, s)
+
+    def _Settings_fp(self, param):
+        '''"none" / "default" as is; a relative path resolved against the project root.'''
+        s = str(param).strip()
+        if s.lower() in ('', 'none', 'default') or os.path.isabs(s):
+            return s
+        return Get_project_path(self.project_root_FP, s)
+
+    def _Source_parquet(self, project_root_fp, companion):
+        '''The unprocessed parquet a preprocessing chain starts from, or None (error printed).'''
+        if companion.get('source_parquet'):
+            fp = os.path.join(project_root_fp, companion['source_parquet'])
+        else:
+            fp = Find_selected_parquet(project_root_fp)[0]
+            print('    ⚠️  source_parquet not recorded in the companion JSON (older chain) — using %s'
+                  % os.path.basename(fp))
+        if not os.path.exists(fp):
+            print('    ERROR: source parquet of the preprocessing chain not found: %s' % fp)
+            return None
+        return fp
+
+    def _Rows_aligned(self, df, src_df, source_fp):
+        '''True if the source parquet has the same samples, in the same order, as the input parquet.'''
+        if len(df) != len(src_df):
+            print('    ERROR: %s has %d rows, the input parquet %d — can not refit the chain.'
+                  % (os.path.basename(source_fp), len(src_df), len(df)))
+            return False
+        key = next((k for k in ('sample_id', 'sample_name') if k in df.columns and k in src_df.columns), None)
+        if key and not (df[key].astype(str).values == src_df[key].astype(str).values).all():
+            print('    ERROR: %s and the input parquet differ in %s order — can not refit the chain.'
+                  % (os.path.basename(source_fp), key))
+            return False
+        return True
 
     def _load_json_safe(self, fp, label):
         if not os.path.exists(fp):
@@ -310,6 +385,9 @@ class Process_regression_model(Get_schema_table):
         folds              = int(getattr(p, 'folds',      10))
         regr_sym_param     = str(getattr(p, 'regressionmodelsymbols', 'default')).strip()
         tgt_sym_param      = str(getattr(p, 'targetfeaturesymbols',   'default')).strip()
+        transformation_param  = str(getattr(p, 'indicator_transformation', 'none') or 'none').strip()
+        standardisation_param = str(getattr(p, 'indicator_standardisation', 'none') or 'none').strip()
+        refit_chain        = bool(getattr(p, 'refit_preprocessing', True))
         max_cov            = int(getattr(p, 'n_top_features_in_plot', 0))
         show_scatter       = bool(getattr(p, 'show_observed_predicted',    True))
         save_scatter       = bool(getattr(p, 'save_observed_predicted',    True))
@@ -336,22 +414,45 @@ class Process_regression_model(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
         df, units_D = Read_parquet_with_units(parquet_fp)
+        df   = df.reset_index(drop=True)
         stem = os.path.splitext(os.path.basename(parquet_fp))[0]
         if self.verbose >= 1:
             print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
 
         companion = _load_companion_json(project_root_fp, stem) or {}
+        chain     = companion.get('preprocessing_chain', [])
 
-        spectral_cols = [c for c in df.columns if _is_spectral_col(c)]
+        # Spectra the model starts from: with refit_preprocessing the unprocessed source parquet of the chain,
+        # whose steps are then refitted on the training samples inside the pipeline; otherwise the input parquet.
+        if refit_chain and chain:
+            source_fp = self._Source_parquet(project_root_fp, companion)
+            if source_fp is None:
+                return
+            src_df, src_units_D = Read_parquet_with_units(source_fp)
+            if not self._Rows_aligned(df, src_df, source_fp):
+                return
+            spectral_cols = [c for c in src_df.columns if _is_spectral_col(c)]
+            signal_type   = Signal_type_of(src_units_D, spectral_cols)
+            X_all = src_df[spectral_cols].reset_index(drop=True)
+            if self.verbose >= 1:
+                print('    Refitting %d preprocessing step(s) on the training samples, from %s' % (
+                    len(chain), os.path.basename(source_fp)))
+        else:
+            source_fp     = parquet_fp
+            spectral_cols = [c for c in df.columns if _is_spectral_col(c)]
+            signal_type   = Signal_type_of(units_D, spectral_cols)
+            X_all = df[spectral_cols].reset_index(drop=True)
+            if chain:
+                print('    ⚠️  refit_preprocessing=false: the %d preprocessing step(s) of %s were fitted on all '
+                      'samples, test metrics are optimistic.' % (len(chain), os.path.basename(parquet_fp)))
+            chain = []
+
         if not spectral_cols:
             print('    ERROR: no spectral columns found.')
             return
-        wavelengths = [_col_to_index(c) for c in spectral_cols]
-        col_names   = [str(c) for c in spectral_cols]
+        col_names = [str(c) for c in spectral_cols]
         # Header row 2 — stored on each saved model and in the results JSON
-        signal_type = Signal_type_of(units_D, spectral_cols)
         spectral_header_D = {c: signal_type for c in col_names}
-        X_all       = pd.DataFrame(df[spectral_cols].values.astype(float), columns=col_names)
 
         all_indicators = [
             c for c in df.columns
@@ -376,6 +477,12 @@ class Process_regression_model(Get_schema_table):
         else:
             mp_fp = _DEFAULT_MODEL_PARAMS_FP
         model_params = self._load_json_safe(mp_fp, 'model_parameters')
+
+        # Indicator transformation and standardisation — only what the process sets, default none
+        transformation_raw = _load_transform_config(self._Settings_fp(transformation_param),
+                                                    _DEFAULT_TRANSFORMATION_FPN, self.verbose)
+        standardise_raw    = _load_transform_config(self._Settings_fp(standardisation_param),
+                                                    _DEFAULT_STANDARDISE_FPN, self.verbose)
 
         regr_sym_fp  = self._resolve_symbols_fp(regr_sym_param, _DEFAULT_REGR_SYMBOLS_FP)
         tgt_sym_fp   = self._resolve_symbols_fp(tgt_sym_param,  _DEFAULT_TARGET_SYMBOLS_FP)
@@ -432,26 +539,74 @@ class Process_regression_model(Get_schema_table):
                     print('    Saved: %s' % fp)
             plt.close(fig)
 
+        def _save_model(model, fp, pipeline_D):
+            # The whole fitted chain: preprocessing + regressor (+ indicator transformation)
+            model.spectral_header_ = spectral_header_D
+            model.input_columns_   = col_names
+            model.pipeline_info_   = pipeline_D
+            joblib.dump(model, fp)
+
+        # Test samples: hash of the sample id — the same holdout as the band selection steps
+        test_rows, holdout_key = Holdout_test_mask(df.reset_index(drop=True), test_size)
+
         for indicator in indicator_cols:
-            valid_mask = ~df[indicator].isna()
-            n_valid    = int(valid_mask.sum())
+            y_all = df[indicator].values.astype(float)
+
+            transform, standardise = Indicator_target_settings(indicator, transformation_raw, standardise_raw)
+            in_domain  = Target_domain_mask(np.nan_to_num(y_all, nan=1.0), transform)
+            n_domain   = int((~np.isnan(y_all) & ~in_domain).sum())
+            valid_mask = ~np.isnan(y_all) & in_domain
+            if n_domain:
+                print('    ⚠️  %s: %d value(s) can not be %s-transformed, excluded' % (indicator, n_domain, transform))
+
+            n_valid = int(valid_mask.sum())
             if n_valid < 10:
                 print('    WARNING: too few samples for "%s" (%d), skipping.' % (indicator, n_valid))
                 continue
 
+            try:
+                steps, notes = Chain_to_steps(chain, indicator, test_size)
+            except ValueError as e:
+                print('    ERROR: %s' % e)
+                return
+            for note in notes:
+                print('    ⚠️  %s' % note)
+
+            target = IndicatorTransformer(transform, standardise)
+            pipe   = Pipeline(steps + [('frame', RegressorFrame()), ('regressor', None)])
+
+            def _make_model(regressor):
+                model = clone(pipe).set_params(regressor=clone(regressor))
+                if transform != 'linear' or standardise:
+                    model = TransformedTargetRegressor(regressor=model, transformer=clone(target),
+                                                       check_inverse=False)
+                return model
+
+            pipeline_D = {
+                'steps':     [name for name, _ in steps],
+                'indicator': {'transform': transform, 'standardise': standardise},
+                'holdout':   {'test_size': test_size, 'key': holdout_key},
+                'notes':     notes,
+            }
+
             X = X_all[valid_mask]
-            y = df.loc[valid_mask, indicator].values.astype(float)
-            results_D[indicator] = {}
+            y = y_all[valid_mask]
+            results_D[indicator] = {'pipeline': pipeline_D}
             ind_s     = _ind_safe(indicator)
             ind_color = tgt_sym_D.get(indicator, {}).get('color', 'steelblue')
 
             if self.verbose >= 1:
-                print('    Indicator: %s  (%d samples, %d bands)' % (indicator, n_valid, X.shape[1]))
+                print('    Indicator: %s  (%d samples, %d bands, transform=%s, standardise=%s)' % (
+                    indicator, n_valid, X.shape[1], transform, standardise))
 
-            # split once per indicator — deterministic with fixed random_state
             if traintest:
-                X_tr, X_te, y_tr, y_te = train_test_split(
-                    X, y, test_size=test_size, random_state=42, shuffle=True)
+                tr_mask = valid_mask & ~test_rows
+                te_mask = valid_mask & test_rows
+                X_tr, y_tr = X_all[tr_mask], y_all[tr_mask]
+                X_te, y_te = X_all[te_mask], y_all[te_mask]
+                if len(y_te) < 2 or len(y_tr) < 10:
+                    print('    WARNING: too few train (%d) / test (%d) samples for "%s", skipping train/test.' % (
+                        len(y_tr), len(y_te), indicator))
 
             for model_key, model_proto in regressors.items():
 
@@ -459,20 +614,21 @@ class Process_regression_model(Get_schema_table):
                     print('      Model: %s' % model_key)
 
                 # ---- train / test
-                if traintest:
-                    model_tt = clone(model_proto)
+                if traintest and len(y_te) >= 2 and len(y_tr) >= 10:
+                    model_tt = _make_model(model_proto)
                     model_tt.fit(X_tr, y_tr)
-                    pred_tt  = model_tt.predict(X_te).ravel()
+                    pred_tt  = np.ravel(model_tt.predict(X_te))
 
                     metrics_tt = _compute_metrics(y_te, pred_tt)
                     metrics_tt['n_train'] = len(y_tr)
                     metrics_tt['n_test']  = len(y_te)
 
+                    fitted_D = dict(pipeline_D, indicator=_Fitted_target(model_tt))
                     jl_fp = os.path.join(models_dir_tt,
                                          '%s_%s_%s_tt.joblib' % (stem, ind_s, model_key))
-                    model_tt.spectral_header_ = spectral_header_D
-                    joblib.dump(model_tt, jl_fp)
+                    _save_model(model_tt, jl_fp, fitted_D)
                     metrics_tt['model_fp'] = jl_fp
+                    metrics_tt['indicator_transformation'] = fitted_D['indicator']
 
                     if show_scatter or save_scatter:
                         fig = _plot_scatter(y_te, pred_tt, model_key, indicator,
@@ -482,10 +638,11 @@ class Process_regression_model(Get_schema_table):
                                                  'scatter_%s_%s_tt.png' % (ind_s, model_key)),
                                     show_scatter, save_scatter)
 
+                    tail = _Fitted_tail(model_tt)
                     if show_feat or save_feat:
-                        imp = _feature_importance(model_tt, model_key, col_names)
+                        imp = _feature_importance(tail.regressor, model_key)
                         if imp is not None:
-                            fig2 = _plot_importance(imp, wavelengths, model_key, indicator, 'tt',
+                            fig2 = _plot_importance(imp, tail.Features(X_tr), model_key, indicator, 'tt',
                                                     color=ind_color)
                             _handle_fig(fig2,
                                         os.path.join(plot_dir_tt,
@@ -493,25 +650,26 @@ class Process_regression_model(Get_schema_table):
                                         show_feat, save_feat)
 
                     if (show_perm or save_perm) and model_key.lower() != 'cubist':
+                        Xt_te = tail.Preprocess(X_te)
+                        feat_wl = tail.Features(X_te)
                         pi = sk_permutation_importance(
-                            model_tt, X_te, y_te, n_repeats=10, random_state=42)
-                        fig3 = _plot_permutation(pi, wavelengths, model_key, indicator, 'train/test',
+                            tail, Xt_te, y_te, scoring='r2', n_repeats=10, random_state=42)
+                        fig3 = _plot_permutation(pi, feat_wl, model_key, indicator, 'train/test',
                                                  color=ind_color, max_cov=max_cov)
                         _handle_fig(fig3,
                                     os.path.join(plot_dir_tt,
                                                  'permutation_%s_%s_tt.png' % (ind_s, model_key)),
                                     show_perm, save_perm)
-                        _save_permutation_data(pi, wavelengths, model_key, indicator, 'tt', cov_dir_tt)
+                        _save_permutation_data(pi, feat_wl, model_key, indicator, 'tt', cov_dir_tt)
 
                     results_D[indicator].setdefault('traintest', {})[model_key] = metrics_tt
                     if self.verbose >= 1:
                         print('        [tt] r2=%.3f  rmse=%.3f  rpiq=%.3f' % (
                             metrics_tt['r2'], metrics_tt['rmse'], metrics_tt['rpiq']))
 
-                # ---- k-fold
+                # ---- k-fold (the whole pipeline is refitted in every fold)
                 if do_kfold:
-                    model_kf = clone(model_proto)
-                    pred_kf  = cross_val_predict(model_kf, X, y, cv=folds)
+                    pred_kf  = np.ravel(cross_val_predict(_make_model(model_proto), X, y, cv=folds))
                     metrics_kf = _compute_metrics(y, pred_kf)
                     metrics_kf['n'] = len(y)
 
@@ -525,7 +683,7 @@ class Process_regression_model(Get_schema_table):
                     for scoring, key_out in _scoring_map:
                         try:
                             cv_scores = cross_val_score(
-                                clone(model_proto), X, y, cv=folds, scoring=scoring)
+                                _make_model(model_proto), X, y, cv=folds, scoring=scoring)
                             metrics_kf[key_out + '_folded_mean'] = round(
                                 float(abs(cv_scores.mean())), 4)
                             metrics_kf[key_out + '_folded_std'] = round(
@@ -533,12 +691,14 @@ class Process_regression_model(Get_schema_table):
                         except Exception:
                             pass
 
+                    model_kf = _make_model(model_proto)
                     model_kf.fit(X, y)
+                    fitted_D = dict(pipeline_D, indicator=_Fitted_target(model_kf))
                     jl_fp = os.path.join(models_dir_kf,
                                          '%s_%s_%s_kf.joblib' % (stem, ind_s, model_key))
-                    model_kf.spectral_header_ = spectral_header_D
-                    joblib.dump(model_kf, jl_fp)
+                    _save_model(model_kf, jl_fp, fitted_D)
                     metrics_kf['model_fp'] = jl_fp
+                    metrics_kf['indicator_transformation'] = fitted_D['indicator']
 
                     if show_scatter or save_scatter:
                         fig = _plot_scatter(y, pred_kf, model_key, indicator,
@@ -548,10 +708,11 @@ class Process_regression_model(Get_schema_table):
                                                  'scatter_%s_%s_kf.png' % (ind_s, model_key)),
                                     show_scatter, save_scatter)
 
+                    tail = _Fitted_tail(model_kf)
                     if show_feat or save_feat:
-                        imp = _feature_importance(model_kf, model_key, col_names)
+                        imp = _feature_importance(tail.regressor, model_key)
                         if imp is not None:
-                            fig2 = _plot_importance(imp, wavelengths, model_key, indicator, 'kf',
+                            fig2 = _plot_importance(imp, tail.Features(X), model_key, indicator, 'kf',
                                                     color=ind_color)
                             _handle_fig(fig2,
                                         os.path.join(plot_dir_kf,
@@ -559,15 +720,16 @@ class Process_regression_model(Get_schema_table):
                                         show_feat, save_feat)
 
                     if (show_perm or save_perm) and model_key.lower() != 'cubist':
+                        feat_wl = tail.Features(X)
                         pi = sk_permutation_importance(
-                            model_kf, X, y, n_repeats=10, random_state=42)
-                        fig3 = _plot_permutation(pi, wavelengths, model_key, indicator, 'k-fold',
+                            tail, tail.Preprocess(X), y, scoring='r2', n_repeats=10, random_state=42)
+                        fig3 = _plot_permutation(pi, feat_wl, model_key, indicator, 'k-fold',
                                                  color=ind_color, max_cov=max_cov)
                         _handle_fig(fig3,
                                     os.path.join(plot_dir_kf,
                                                  'permutation_%s_%s_kf.png' % (ind_s, model_key)),
                                     show_perm, save_perm)
-                        _save_permutation_data(pi, wavelengths, model_key, indicator, 'kf', cov_dir_kf)
+                        _save_permutation_data(pi, feat_wl, model_key, indicator, 'kf', cov_dir_kf)
 
                     results_D[indicator].setdefault('kfold', {})[model_key] = metrics_kf
                     if self.verbose >= 1:
@@ -579,6 +741,8 @@ class Process_regression_model(Get_schema_table):
 
         out_json = {
             'source_parquet':      os.path.basename(parquet_fp),
+            'model_input_parquet': os.path.basename(source_fp),
+            'refit_preprocessing': bool(chain),
             'preprocessing_chain': companion.get('preprocessing_chain', []),
             'signal_type':         signal_type,
             'feature_columns':     col_names,

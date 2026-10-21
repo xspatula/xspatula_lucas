@@ -39,6 +39,7 @@ from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
 from src.ai4sh.project_paths import Default_fpn
 from src.ai4sh.provenance import Load_config_json
+from src.ai4sh.ml_transformers import Holdout_test_mask, Holdout_info
 
 _METADATA_COLS = frozenset([
     'sample_id', 'sample_name', 'campaign_tag', 'sampling_log_tag', 'campaign_name', 'latitude_dd', 'longitude_dd',
@@ -203,6 +204,8 @@ def _write_companion_json(project_root_fp, in_stem, out_stem, out_cols, step_inf
                           signal_type=None):
     '''Write companion JSON for an output parquet, inheriting input companion metadata.'''
     companion = _load_companion_json(project_root_fp, in_stem) or {}
+    # The unprocessed parquet the chain starts from — regression modeling refits the chain on it
+    companion.setdefault('source_parquet', in_stem + '.parquet')
     companion['output_data'] = _build_output_data(out_cols, signal_type)
     chain = list(companion.get('preprocessing_chain', []))
     step_num = len(chain) + 1
@@ -1449,6 +1452,7 @@ class Process_ml_preprocess(Get_schema_table):
         cfg = Load_config_json(uv_fp)
 
         n_features          = int(cfg.get('SelectKBest', {}).get('n_features', 20))
+        test_size           = float(getattr(p, 'test_size', 0.3))
         dataframe_param     = str(getattr(p, 'dataframe', 'raw')).strip()
         indicator_array     = _parse_array_param(getattr(p, 'indicator_array', []))
         separate_selections = bool(getattr(p, 'separate_selections', False))
@@ -1505,10 +1509,16 @@ class Process_ml_preprocess(Get_schema_table):
         n_bands  = X_full.shape[1]
         k        = min(n_features, n_bands)
 
+        # Select from the training samples only — the test samples (same holdout as regression_modeling) stay unseen
+        train_rows = ~Holdout_test_mask(df, test_size)[0]
+        holdout    = Holdout_info(df, test_size)
+        if self.verbose >= 1:
+            print('    Selecting from %d training samples (test_size=%.2f held out)' % (int(train_rows.sum()), test_size))
+
         if separate_selections:
             for indicator in indicator_cols:
                 abbrev     = 'uv-' + indicator.replace(' ', '-')
-                valid_mask = ~df[indicator].isna()
+                valid_mask = ~df[indicator].isna() & train_rows
                 n_valid    = int(valid_mask.sum())
                 if n_valid < 5:
                     print('    WARNING: too few valid samples for "%s" (%d), skipping.' % (
@@ -1552,8 +1562,11 @@ class Process_ml_preprocess(Get_schema_table):
                         'univariate_selector_fp': uv_fp_param,
                         'indicator': indicator,
                         'n_features_selected': len(retained_cols),
+                        'test_size': test_size,
                     },
                     'univariate_selector': cfg,
+                    'selected_bands': retained_wl,
+                    'holdout': holdout,
                 }
                 self._Accept_and_save(df, spec_out_df, retained_wl, abbrev,
                                        stem, project_root_fp, overwrite, step_info, units_D)
@@ -1563,7 +1576,7 @@ class Process_ml_preprocess(Get_schema_table):
             scores_sum  = np.zeros(n_bands)
             n_valid_ind = 0
             for indicator in indicator_cols:
-                valid_mask = ~df[indicator].isna()
+                valid_mask = ~df[indicator].isna() & train_rows
                 if valid_mask.sum() < 5:
                     print('    WARNING: too few valid samples for "%s" (%d), skipping.' % (
                         indicator, int(valid_mask.sum())))
@@ -1613,8 +1626,11 @@ class Process_ml_preprocess(Get_schema_table):
                     'univariate_selector_fp': uv_fp_param,
                     'indicators': indicator_cols,
                     'n_features_selected': len(retained_cols),
+                    'test_size': test_size,
                 },
                 'univariate_selector': cfg,
+                'selected_bands': retained_wl,
+                'holdout': holdout,
             }
             self._Accept_and_save(df, spec_out_df, retained_wl, 'uv',
                                    stem, project_root_fp, overwrite, step_info, units_D)
@@ -1648,6 +1664,7 @@ class Process_ml_preprocess(Get_schema_table):
         separate_selections = bool(getattr(p, 'separate_selections', False))
         n_top               = int(getattr(p, 'n_top_features_in_plot', 0))
         overwrite           = bool(getattr(p, 'overwrite', False))
+        test_size           = float(getattr(p, 'test_size', 0.3))
 
         if not selector_array:
             print('    ERROR: selector_array is empty.')
@@ -1709,6 +1726,12 @@ class Process_ml_preprocess(Get_schema_table):
         wavelengths = [_col_to_index(c) for c in spectral_cols]
         X_all       = df[spectral_cols].values.astype(float)
         n_bands     = len(spectral_cols)
+
+        # Select from the training samples only — the test samples (same holdout as regression_modeling) stay unseen
+        train_rows = ~Holdout_test_mask(df, test_size)[0]
+        holdout    = Holdout_info(df, test_size)
+        if self.verbose >= 1:
+            print('    Selecting from %d training samples (test_size=%.2f held out)' % (int(train_rows.sum()), test_size))
 
         all_indicators = [
             c for c in df.columns
@@ -1918,7 +1941,10 @@ class Process_ml_preprocess(Get_schema_table):
                     'selector':           sel_key,
                     'indicator':          indicator,
                     'n_features_selected': n_retain,
+                    'test_size':          test_size,
                 },
+                'selected_bands': top_wl,
+                'holdout': holdout,
             }
             _write_companion_json(project_root_fp, stem, out_stem,
                                    list(spec_out.columns), step_info, signal_type)
@@ -1937,7 +1963,7 @@ class Process_ml_preprocess(Get_schema_table):
         # ---- main loop: indicator × regressor × selector ----
         if separate_selections:
             for indicator in indicator_cols:
-                valid_mask = ~df[indicator].isna()
+                valid_mask = ~df[indicator].isna() & train_rows
                 n_valid    = int(valid_mask.sum())
                 if n_valid < 10:
                     print('    WARNING: too few samples for "%s" (%d), skipping.' % (
@@ -1989,7 +2015,7 @@ class Process_ml_preprocess(Get_schema_table):
                     scores_sum  = np.zeros(n_bands)
                     n_valid_ind = 0
                     for indicator in indicator_cols:
-                        valid_mask = ~df[indicator].isna()
+                        valid_mask = ~df[indicator].isna() & train_rows
                         if valid_mask.sum() < 10:
                             continue
                         X = X_all[valid_mask]

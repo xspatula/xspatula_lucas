@@ -81,6 +81,27 @@
               "hint": "whether or not to apply regression modeling using a k-fold approach"
             },
             {
+              "parameter": "indicator_transformation",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "none",
+              "hint": "Transformation of the indicator(s) before modeling: none, default (the default transformation settings) or the path (relative to the project root) of a transformation JSON. Fitted on the training samples; predictions are returned in the native unit."
+            },
+            {
+              "parameter": "indicator_standardisation",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "none",
+              "hint": "Z-score standardisation of the indicator(s) before modeling: none, default (the default standardise settings) or the path (relative to the project root) of a standardise JSON. Fitted on the training samples; predictions are returned in the native unit."
+            },
+            {
+              "parameter": "refit_preprocessing",
+              "parameter_type": "boolean",
+              "required": false,
+              "default_value": true,
+              "hint": "Refit the preprocessing chain of the input dataframe (from its companion JSON) on the training samples inside the model pipeline, starting from the unprocessed source parquet. false = train on the preprocessed dataframe as is (preprocessing fitted on all samples, optimistic test metrics)."
+            },
+            {
               "parameter": "folds",
               "parameter_type": "integer",
               "required": false,

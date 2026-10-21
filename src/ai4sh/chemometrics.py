@@ -10,7 +10,7 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.stats import boxcox
-from sklearn.preprocessing import PowerTransformer, QuantileTransformer, StandardScaler, normalize
+from sklearn.preprocessing import PowerTransformer, QuantileTransformer, normalize
 from sklearn.decomposition import PCA
 from src.ai4sh.project_paths import Default_fpn
 from src.ai4sh.provenance import Load_config_json
@@ -245,6 +245,33 @@ def apply_scatter_correction(df, columns, cfg):
     return work, list(columns), '+'.join(scalers)
 
 
+def Scaling_parameters(X, method):
+    '''Return (mean, scale) per band for a spectral scaling method; scaled = (X - mean) / scale.
+
+    meancentring: mean, 1 | autoscaling: mean, std | paretoscaling: mean, sqrt(std) |
+    poissonscaling: 0, sqrt(mean) | anything else: 0, 1. A zero scale is set to 1.
+    '''
+    X = np.asarray(X, dtype=float)
+    mean = X.mean(axis=0)
+    std = X.std(axis=0)
+    ones = np.ones(X.shape[1])
+
+    if method == 'meancentring':
+        center, scale = mean, ones
+    elif method == 'autoscaling':
+        center, scale = mean, std
+    elif method == 'paretoscaling':
+        center, scale = mean, np.sqrt(std)
+    elif method == 'poissonscaling':
+        # Divides each band by sqrt of its mean — Poisson noise model
+        center, scale = np.zeros(X.shape[1]), np.sqrt(mean)
+    else:
+        center, scale = np.zeros(X.shape[1]), ones
+
+    scale = np.where((scale == 0) | ~np.isfinite(scale), 1.0, scale)
+    return center, scale
+
+
 def apply_scaling(df, columns, cfg):
     '''Apply one scaling method to spectral DataFrame.
 
@@ -253,31 +280,9 @@ def apply_scaling(df, columns, cfg):
     '''
     method = cfg.get('method', 'meancentring')
     X = df[columns].values.astype(float)
+    center, scale = Scaling_parameters(X, method)
 
-    if method == 'meancentring':
-        X_out = StandardScaler(with_std=False).fit_transform(X)
-
-    elif method == 'autoscaling':
-        X_out = StandardScaler().fit_transform(X)
-
-    elif method == 'paretoscaling':
-        scaler = StandardScaler().fit(X)
-        scaler.mean_ = np.zeros(X.shape[1])
-        scaler.var_ = np.sqrt(scaler.var_)
-        scaler.scale_ = np.sqrt(scaler.var_)
-        X_out = scaler.transform(X)
-
-    elif method == 'poissonscaling':
-        # Divides each band by sqrt of its mean — Poisson noise model
-        scaler = StandardScaler(with_mean=False).fit(X)
-        scaler.var_ = scaler.mean_.copy()
-        scaler.scale_ = np.sqrt(scaler.var_)
-        X_out = scaler.transform(X)
-
-    else:
-        X_out = X.copy()
-
-    df_out = pd.DataFrame(data=X_out, columns=columns, index=df.index)
+    df_out = pd.DataFrame(data=(X - center) / scale, columns=columns, index=df.index)
     return df_out, list(columns), method
 
 
