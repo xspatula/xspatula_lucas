@@ -111,6 +111,13 @@ def Holdout_info(df, test_size, seed=HOLDOUT_SEED):
 
 # ------------------------------------------------------------------ spectral transformers
 
+class _Stateless:
+    '''Mixin for transformers that learn nothing: always fitted (so a sliced fitted Pipeline can transform).'''
+
+    def __sklearn_is_fitted__(self):
+        return True
+
+
 class BandColumns(BaseEstimator, TransformerMixin):
     '''Keep the spectral columns seen at fit, in that order, with numeric names.'''
 
@@ -127,7 +134,7 @@ class BandColumns(BaseEstimator, TransformerMixin):
         return X[self.columns_in_]
 
 
-class SpectralFilter(BaseEstimator, TransformerMixin):
+class SpectralFilter(_Stateless, BaseEstimator, TransformerMixin):
     '''Single smoothing filter (moving average, gauss, Savitzky-Golay, lowess); stateless.'''
 
     def __init__(self, filter_cfg=None):
@@ -142,7 +149,7 @@ class SpectralFilter(BaseEstimator, TransformerMixin):
         return out
 
 
-class MultiFilter(BaseEstimator, TransformerMixin):
+class MultiFilter(_Stateless, BaseEstimator, TransformerMixin):
     '''Per-region filters; bands between the regions are dropped; stateless.'''
 
     def __init__(self, multi_filter_cfg=None):
@@ -157,7 +164,7 @@ class MultiFilter(BaseEstimator, TransformerMixin):
         return out[cols]
 
 
-class Derivative(BaseEstimator, TransformerMixin):
+class Derivative(_Stateless, BaseEstimator, TransformerMixin):
     '''Finite-difference derivative of order `derivative`; append=True keeps the input bands as well.'''
 
     def __init__(self, derivative=1, append=False):
@@ -323,7 +330,7 @@ class FixedBands(BaseEstimator, TransformerMixin):
         return _Numeric_frame(X)[self.columns_out_]
 
 
-class RegressorFrame(BaseEstimator, TransformerMixin):
+class RegressorFrame(_Stateless, BaseEstimator, TransformerMixin):
     '''Last step before the regressor: string column names f_<index> (cubist needs string names).'''
 
     def fit(self, X, y=None):

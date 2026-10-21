@@ -108,6 +108,19 @@ def Load_config_json(fpn):
     return data
 
 
+def File_sha256(fpn, chunk=1 << 20):
+    '''sha256 of a file (read in chunks).'''
+
+    h = hashlib.sha256()
+
+    with open(fpn, 'rb') as fh:
+
+        for block in iter(lambda: fh.read(chunk), b''):
+            h.update(block)
+
+    return h.hexdigest()
+
+
 def Provenance_snapshot():
     '''Return the provenance of the running process as a JSON-ready dict.'''
 

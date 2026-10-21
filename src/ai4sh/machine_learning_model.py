@@ -7,6 +7,8 @@ Created on 26 April 2026
 import os
 import json
 
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -59,7 +61,7 @@ from src.ai4sh.ml_transformers import (Chain_to_steps, Column_index, Holdout_tes
                                        Indicator_target_settings, RegressorFrame, Target_domain_mask)
 from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.project_paths import Default_fpn
-from src.ai4sh.provenance import Load_config_json, Provenance_snapshot
+from src.ai4sh.provenance import Load_config_json, Provenance_snapshot, File_sha256
 
 _DEFAULT_MODEL_PARAMS_FP = Default_fpn('regressors', 'regression_model_parameters.json')
 _DEFAULT_REGR_SYMBOLS_FP = Default_fpn('plot', 'regressionmodelsymbols.json')
@@ -243,6 +245,11 @@ def _save_permutation_data(pi_result, wavelengths, model_key, indicator, mode_la
 
 # ------------------------------------------------------------------ fitted model helpers
 
+def Manifest_fp(model_fp):
+    '''Path of the manifest JSON saved next to a model: <name>.joblib → <name>.manifest.json.'''
+    return os.path.splitext(model_fp)[0] + '.manifest.json'
+
+
 def _Fitted_target(model):
     '''Fitted indicator transformation of a model (lambda, mean, std ...) as a JSON-ready dict.'''
     if isinstance(model, TransformedTargetRegressor):
@@ -388,6 +395,7 @@ class Process_regression_model(Get_schema_table):
         transformation_param  = str(getattr(p, 'indicator_transformation', 'none') or 'none').strip()
         standardisation_param = str(getattr(p, 'indicator_standardisation', 'none') or 'none').strip()
         refit_chain        = bool(getattr(p, 'refit_preprocessing', True))
+        model_fp_param     = str(getattr(p, 'model_fp', '') or '').strip()
         max_cov            = int(getattr(p, 'n_top_features_in_plot', 0))
         show_scatter       = bool(getattr(p, 'show_observed_predicted',    True))
         save_scatter       = bool(getattr(p, 'save_observed_predicted',    True))
@@ -508,8 +516,11 @@ class Process_regression_model(Get_schema_table):
             return
 
         # mode-specific output subfolders
-        models_dir_tt = os.path.join(project_root_fp, 'models',              stem + '_tt')
-        models_dir_kf = os.path.join(project_root_fp, 'models',              stem + '_kf')
+        # Saved models: model_fp (relative to the project root) or <project_root_fp>/models
+        models_root   = (os.path.join(project_root_fp, 'models') if not model_fp_param
+                         else self._Settings_fp(model_fp_param))
+        models_dir_tt = os.path.join(models_root, stem + '_tt')
+        models_dir_kf = os.path.join(models_root, stem + '_kf')
         plot_dir_tt   = os.path.join(project_root_fp, 'plot',                stem + '_tt')
         plot_dir_kf   = os.path.join(project_root_fp, 'plot',                stem + '_kf')
         cov_dir_tt    = os.path.join(project_root_fp, 'covariate_importance', stem + '_tt')
@@ -539,12 +550,44 @@ class Process_regression_model(Get_schema_table):
                     print('    Saved: %s' % fp)
             plt.close(fig)
 
-        def _save_model(model, fp, pipeline_D):
-            # The whole fitted chain: preprocessing + regressor (+ indicator transformation)
+        data_D = {
+            'input_parquet':  os.path.basename(parquet_fp),
+            'input_sha256':   File_sha256(parquet_fp),
+            'source_parquet': os.path.basename(source_fp),
+            'source_sha256':  File_sha256(source_fp) if source_fp != parquet_fp else None,
+            'directory':      project_root_fp,
+        }
+
+        def _save_model(model, fp, pipeline_D, indicator, model_key, mode, metrics, train_rows):
+            '''Save the whole fitted chain (preprocessing + regressor + indicator transformation) and its manifest.'''
             model.spectral_header_ = spectral_header_D
             model.input_columns_   = col_names
             model.pipeline_info_   = pipeline_D
             joblib.dump(model, fp)
+            metrics['model_fp']     = fp
+            metrics['model_sha256'] = File_sha256(fp)
+            metrics['manifest_fp']  = Manifest_fp(fp)
+            ids = (df.loc[train_rows, holdout_key].tolist() if holdout_key in df.columns
+                   else np.flatnonzero(train_rows).tolist())
+            manifest = {
+                'manifest_version':    1,
+                'created_at':          datetime.now().isoformat(timespec='seconds'),
+                'model_file':          os.path.basename(fp),
+                'model_sha256':        metrics['model_sha256'],
+                'indicator':           indicator,
+                'indicator_unit':      units_D.get(indicator),
+                'regressor':           model_key,
+                'hyper_parameters':    model_params.get(model_key, {}).get('hyper_parameters', {}),
+                'mode':                mode,
+                'input':               {'columns': col_names, 'signal_type': signal_type, 'n_bands': len(col_names)},
+                'pipeline':            pipeline_D,
+                'preprocessing_chain': companion.get('preprocessing_chain', []),
+                'data':                dict(data_D, sample_id_key=holdout_key, n_train=len(ids), train_sample_ids=ids),
+                'metrics':             {k: v for k, v in metrics.items() if k not in ('model_fp', 'manifest_fp')},
+                'provenance':          Provenance_snapshot(),
+            }
+            with open(metrics['manifest_fp'], 'w') as fh:
+                json.dump(manifest, fh, indent=2, default=str)
 
         # Test samples: hash of the sample id — the same holdout as the band selection steps
         test_rows, holdout_key = Holdout_test_mask(df.reset_index(drop=True), test_size)
@@ -624,11 +667,10 @@ class Process_regression_model(Get_schema_table):
                     metrics_tt['n_test']  = len(y_te)
 
                     fitted_D = dict(pipeline_D, indicator=_Fitted_target(model_tt))
+                    metrics_tt['indicator_transformation'] = fitted_D['indicator']
                     jl_fp = os.path.join(models_dir_tt,
                                          '%s_%s_%s_tt.joblib' % (stem, ind_s, model_key))
-                    _save_model(model_tt, jl_fp, fitted_D)
-                    metrics_tt['model_fp'] = jl_fp
-                    metrics_tt['indicator_transformation'] = fitted_D['indicator']
+                    _save_model(model_tt, jl_fp, fitted_D, indicator, model_key, 'traintest', metrics_tt, tr_mask)
 
                     if show_scatter or save_scatter:
                         fig = _plot_scatter(y_te, pred_tt, model_key, indicator,
@@ -694,11 +736,10 @@ class Process_regression_model(Get_schema_table):
                     model_kf = _make_model(model_proto)
                     model_kf.fit(X, y)
                     fitted_D = dict(pipeline_D, indicator=_Fitted_target(model_kf))
+                    metrics_kf['indicator_transformation'] = fitted_D['indicator']
                     jl_fp = os.path.join(models_dir_kf,
                                          '%s_%s_%s_kf.joblib' % (stem, ind_s, model_key))
-                    _save_model(model_kf, jl_fp, fitted_D)
-                    metrics_kf['model_fp'] = jl_fp
-                    metrics_kf['indicator_transformation'] = fitted_D['indicator']
+                    _save_model(model_kf, jl_fp, fitted_D, indicator, model_key, 'kfold', metrics_kf, valid_mask)
 
                     if show_scatter or save_scatter:
                         fig = _plot_scatter(y, pred_kf, model_key, indicator,

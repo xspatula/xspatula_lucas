@@ -102,6 +102,13 @@
               "hint": "Refit the preprocessing chain of the input dataframe (from its companion JSON) on the training samples inside the model pipeline, starting from the unprocessed source parquet. false = train on the preprocessed dataframe as is (preprocessing fitted on all samples, optimistic test metrics)."
             },
             {
+              "parameter": "model_fp",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Folder for the saved models (.joblib + .manifest.json), relative to the project root. Empty = <project_root_fp>/models."
+            },
+            {
               "parameter": "folds",
               "parameter_type": "integer",
               "required": false,

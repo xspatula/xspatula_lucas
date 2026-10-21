@@ -15,6 +15,7 @@ from src.ai4sh.select import Process_select
 
 from src.ai4sh.machine_learning_preprocess import Process_ml_preprocess
 from src.ai4sh.machine_learning_model import Process_regression_model
+from src.ai4sh.machine_learning_predict import Process_predict
 
 from src.ai4sh.pandas_df_management import Process_pandas
 
@@ -135,6 +136,9 @@ def Run_process(structured_process_D, scheme_params_D):
                 if process_S.process.process == 'regression_modeling':
                     model_C = Process_regression_model(process_S, pg_session_C, scheme_params_D['project_root_FP'])
                     model_C._Sub_process(key)
+                elif process_S.process.process == 'predict_independent':
+                    predict_C = Process_predict(process_S, pg_session_C, scheme_params_D['project_root_FP'])
+                    predict_C._Sub_process(key)
                 else:
                     ml_C = Process_ml_preprocess(process_S, pg_session_C, scheme_params_D['project_root_FP'])
                     ml_C._Sub_process(key)
