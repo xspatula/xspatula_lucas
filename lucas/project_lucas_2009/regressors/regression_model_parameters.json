@@ -1,7 +1,7 @@
 {
   "ols": {
     "hyper_parameters": {
-      "fit_intercept": false
+      "fit_intercept": true
     }
   },
   "theil_sen": {

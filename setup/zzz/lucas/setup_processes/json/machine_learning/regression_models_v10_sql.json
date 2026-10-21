@@ -106,14 +106,7 @@
               "parameter_type": "integer",
               "required": false,
               "default_value": 10,
-              "hint": "whether or not to apply regression modeling using a k-fold approach"
-            },
-            {
-              "parameter": "folds",
-              "parameter_type": "integer",
-              "required": false,
-              "default_value": 10,
-              "hint": "whether or not to apply regression modeling using a k-fold approach"
+              "hint": "number of folds for the k-fold approach (used when kfold is true)"
             },
             {
               "parameter": "targetfeaturesymbols",
