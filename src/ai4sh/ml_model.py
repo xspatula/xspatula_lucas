@@ -19,14 +19,16 @@ The parameter sets are taken from the provenance of the modelling run (manifest)
 produced the input parquet (.previous_dataframe of the data folder). Settings read from files are not in ml_setting;
 their content and sha256 are kept in the manifest.
 
-A registered model is not changed or replaced; register the new model under another name.
+A registered model is not changed or replaced; register the new model under another name. retire_model marks a model
+as retired (it can no longer be applied by name; its record and frozen parameter sets stay). predict_independent
+adds the metrics on independent samples of a registered model to ml_model.model_metric (dataset independent:<parquet>).
 '''
 
 # Standard library imports
 import os
 import json
 
-from src.ai4sh.ml_setting import Is_path
+from src.ai4sh.ml_setting import Is_path, SESSION_USER_SQL
 from src.ai4sh.provenance import File_sha256
 from src.ai4sh.previous_dataframe import Read_previous_history
 
@@ -142,8 +144,8 @@ def Register_model(pg_session_C, model_fp, name='', abstract='', verbose=1):
     try:
         cur.execute(
             "INSERT INTO ml_model.model (name, indicator_id, regressor, mode, signal_type, n_bands, n_train, n_test, "
-            "model_fp, model_sha256, source_parquet, source_sha256, manifest, abstract) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s) RETURNING id;",
+            "model_fp, model_sha256, source_parquet, source_sha256, manifest, abstract, registered_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, " + SESSION_USER_SQL + ") RETURNING id;",
             (name, indicator_id, manifest['regressor'], manifest['mode'], inp.get('signal_type'), inp.get('n_bands'),
              metrics.get('n_train', data.get('n_train')), metrics.get('n_test'), os.path.abspath(model_fp),
              manifest['model_sha256'], data.get('source_parquet'), data.get('source_sha256'),
@@ -214,6 +216,67 @@ def Registered_model(pg_session_C, name):
     return rec[0], rec[1]
 
 
+def Retire_model(pg_session_C, name, verbose=1):
+    '''Set a registered model to retired; True if it was changed.'''
+
+    pg = pg_session_C
+
+    pg.cursor.execute("UPDATE ml_model.model SET status = 'retired' WHERE name = %s AND status = 'registered' RETURNING id;",
+                      (str(name).strip().lower(),))
+
+    changed = pg.cursor.fetchone() is not None
+
+    pg.conn.commit()
+
+    if verbose >= 1:
+        print('    %s' % ('✅ model "%s" retired' % name if changed else '"%s" is not a registered model (unknown or already retired)' % name))
+
+    return changed
+
+
+def Record_independent_metrics(pg_session_C, model_sha256, parquet_name, metrics, verbose=1):
+    '''Write metrics on independent samples for the registered model with this sha256 (no-op if not registered or
+    the registry is not set up). Rerunning with the same parquet replaces the values. Never raises.'''
+
+    pg = pg_session_C
+
+    if pg is None:
+        return False
+
+    try:
+        if not pg._Execute_search_single_sql("SELECT to_regclass('ml_model.model') IS NOT NULL;")[0]:
+            return False
+
+        rec = pg._Execute_search_single_sql("SELECT id, name FROM ml_model.model WHERE model_sha256 = %s;", (model_sha256,))
+
+        if not rec:
+            return False
+
+        dataset = 'independent:%s' % os.path.splitext(os.path.basename(parquet_name))[0]
+
+        for metric, value in metrics.items():
+            if metric not in METRIC_SKIP and isinstance(value, (int, float)) and not isinstance(value, bool):
+                pg.cursor.execute(
+                    "INSERT INTO ml_model.model_metric (model_id, dataset, metric, value, n) VALUES (%s, %s, %s, %s, %s) "
+                    "ON CONFLICT (model_id, dataset, metric) DO UPDATE SET value = EXCLUDED.value, n = EXCLUDED.n;",
+                    (rec[0], dataset, metric, float(value), metrics.get('n')))
+
+        pg.conn.commit()
+
+        if verbose >= 1:
+            print('    independent metrics added to the registry for "%s" (%s)' % (rec[1], dataset))
+
+        return True
+
+    except Exception as e:
+        try:
+            pg.conn.rollback()
+        except Exception:
+            pass
+        print('    ⚠️  independent metrics not written to the registry: %s' % e)
+        return False
+
+
 class Process_ml_model:
     '''Processes of the root process ml_model.'''
 
@@ -227,6 +290,13 @@ class Process_ml_model:
 
         if self.process_S.process.process == 'register_model':
             self._Register_model()
+
+        elif self.process_S.process.process == 'retire_model':
+
+            from src.ai4sh.machine_learning_preprocess import _parse_array_param
+
+            for name in _parse_array_param(getattr(self.process_S.process.parameters, 'model_array', [])):
+                Retire_model(self.pg_session_C, name, self.verbose)
 
     def _Register_model(self):
 

@@ -30,6 +30,10 @@ and content hash. Until the ml_setting schema exists the default files are used 
 
 New indicators (Fill_new_indicators, run by Run_process after manage_indicator) get a row in every transformation /
 standardisation set and a grey placeholder symbol ("needs_review": true) in every plot_symbol set of target features.
+
+Custom sets (create_parameter_set, user stratum 4-5) start from an existing set (base_set) and apply the changes of a
+settings JSON file in the same shape as the default files. A name that already exists gets a new version; raw and
+preset names are reserved. Loading a name without @version gives its latest version.
 '''
 
 # Standard library imports
@@ -44,6 +48,15 @@ TARGET_TRANSFORMS = ('linear', 'log', 'sqrt', 'reciprocal', 'boxcox', 'yeojohnso
 INDICATOR_FAMILIES = {'transformation': 'transformation', 'standardisation': 'standardise'}
 
 SYNC_FAMILIES = ('transformation', 'standardisation', 'plot_symbol')
+
+FAMILIES = ('transformation', 'standardisation', 'chemometric', 'filter', 'multi_filter', 'selector', 'regressor',
+            'spectra_plot', 'plot_symbol', 'plot_layout')
+
+RESERVED_NAMES = ('', 'none', 'no', 'default')
+
+# community.user.user_name of the logged-in individual (session GUC set at login), else the database role
+SESSION_USER_SQL = ("COALESCE((SELECT user_name FROM community.user "
+                    "WHERE id = NULLIF(current_setting('audit.app_user_id', true), '')::INTEGER), current_user)")
 
 TARGET_SYMBOLS_KEY = 'targetFeatureSymbols'
 
@@ -236,7 +249,7 @@ def Spectra_colormap(param, verbose=1):
 # ------------------------------------------------------------------ per-indicator rows
 
 def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'standardisation'),
-                                  overwrite=False, verbose=1):
+                                  overwrite=False, verbose=1, set_ids=None):
     '''Create the per-indicator rows of every transformation / standardisation set.
 
     Each indicator gets the value of the set's template (looked up by indicator name or alias), otherwise
@@ -253,6 +266,9 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
     sets = pg._Execute_search_all_sql(
         "SELECT id, family, name, version, frozen, content FROM ml_setting.parameter_set "
         "WHERE family = ANY(%s) ORDER BY family, name, version;", (list(families),))
+
+    if set_ids is not None:
+        sets = [s for s in sets if s[0] in set_ids]
 
     written = {}
 
@@ -410,6 +426,170 @@ def Fill_new_indicators(pg_session_C, verbose=1):
         return None
 
 
+# ------------------------------------------------------------------ custom sets
+
+def _Merge(base, change):
+    '''base with change applied: nested dicts merged, anything else replaced.'''
+
+    out = dict(base)
+
+    for k, v in change.items():
+        out[k] = _Merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+
+    return out
+
+
+def _Indicator_change(pg, family, change):
+    '''Per-indicator content keyed by alias (indicator name or alias accepted); ValueError for unknown indicators
+    or values.'''
+
+    key = INDICATOR_FAMILIES[family]
+
+    values = change.get(key, change) if isinstance(change, dict) else None
+
+    if not isinstance(values, dict):
+        raise ValueError('%s settings must be {"%s": {indicator: value}}' % (family, key))
+
+    alias_of = _Alias_map(pg)
+
+    out, unknown = {}, []
+
+    for k, v in values.items():
+
+        if str(k).lower() not in alias_of:
+            unknown.append(k)
+            continue
+
+        if family == 'transformation':
+
+            v = v or {}
+
+            if not isinstance(v, dict) or len([t for t, on in v.items() if on]) > 1 or \
+                    any(t not in TARGET_TRANSFORMS for t in v):
+                raise ValueError('%s: transformation must be {} or one of {"%s": true}'
+                                 % (k, '": true}, {"'.join(TARGET_TRANSFORMS[1:])))
+
+            v = {t: True for t, on in v.items() if on and t != 'linear'}
+
+        elif not isinstance(v, bool):
+            raise ValueError('%s: standardise must be true or false' % k)
+
+        out[alias_of[str(k).lower()]] = v
+
+    if unknown:
+        raise ValueError('not indicators in observation_utility.indicator: %s' % ', '.join(map(str, unknown)))
+
+    return out
+
+
+def Create_parameter_set(pg_session_C, family, name, base_set='standard', change=None, abstract='', verbose=1):
+    '''Save base_set with change applied as custom set family/name (next version if the name exists).
+
+    Returns (set_id, version). Raises ValueError for an invalid family, name, base set or change.
+    '''
+    pg = pg_session_C
+
+    family, name = str(family).strip().lower(), str(name).strip().lower()
+
+    change = change or {}
+
+    if family not in FAMILIES:
+        raise ValueError('family must be one of %s' % ', '.join(FAMILIES))
+
+    if name in RESERVED_NAMES or '@' in name or Is_path(name):
+        raise ValueError('"%s" can not be used as a set name' % name)
+
+    if not isinstance(change, dict):
+        raise ValueError('the settings must be a JSON object')
+
+    rec = pg._Execute_search_single_sql(
+        "SELECT category, max(version) FROM ml_setting.parameter_set WHERE family = %s AND name = %s GROUP BY category;",
+        (family, name))
+
+    if rec and rec[0] != 'custom':
+        raise ValueError('%s/%s is a %s set — choose another name' % (family, name, rec[0]))
+
+    version = rec[1] + 1 if rec else 1
+
+    # Base content
+    base_name, _, base_version = str(base_set or 'none').strip().lower().partition('@')
+
+    base_name = 'standard' if base_name == 'default' else base_name
+
+    base_row = Get_parameter_set(family, base_name or 'none', base_version or None)
+
+    if base_row is None:
+        raise ValueError('no %s parameter set named "%s"' % (family, base_set))
+
+    if family in INDICATOR_FAMILIES:
+
+        key = INDICATOR_FAMILIES[family]
+
+        alias_of = _Alias_map(pg)
+
+        # One key per indicator (its alias), so a change given by name or by alias replaces the base value
+        base_values = {alias_of[str(k).lower()]: v for k, v in _Indicator_content(base_row, 0).get(key, {}).items()
+                       if str(k).lower() in alias_of}
+
+        changed = _Indicator_change(pg, family, change)
+
+        content = {key: dict(base_values, **changed)}
+
+    else:
+
+        changed = change
+
+        content = _Merge(base_row['content'] or {}, change)
+
+    pg.cursor.execute(
+        "INSERT INTO ml_setting.parameter_set (family, name, version, category, creator, abstract, content, content_hash) "
+        "VALUES (%s, %s, %s, 'custom', " + SESSION_USER_SQL + ", %s, %s::jsonb, %s) RETURNING id;",
+        (family, name, version, abstract or 'based on %s/%s@%s' % (family, base_row['name'], base_row['version']),
+         json.dumps(content), Content_hash(content)))
+
+    set_id = pg.cursor.fetchone()[0]
+
+    pg.conn.commit()
+
+    if family in INDICATOR_FAMILIES:
+        Sync_indicator_parameter_sets(pg, [family], verbose=0, set_ids={set_id})
+
+    if verbose >= 1:
+        print('    ✅ custom set %s/%s@%s created from %s/%s@%s (changed: %s)'
+              % (family, name, version, family, base_row['name'], base_row['version'], ', '.join(map(str, changed)) or 'nothing'))
+
+    return set_id, version
+
+
+def _Alias_map(pg):
+    '''{lowercased indicator name or alias: lowercased alias (name if no alias)}.'''
+
+    out = {}
+
+    for name, alias in pg._Execute_search_all_sql("SELECT name, alias FROM observation_utility.indicator;"):
+        for k in (name, alias):
+            if k:
+                out[str(k).lower()] = str(alias or name).lower()
+
+    return out
+
+
+def List_parameter_sets(pg_session_C, family=None):
+    '''Print the parameter sets (optionally of one family).'''
+
+    recs = pg_session_C._Execute_search_all_sql(
+        "SELECT family, name, version, category, frozen, coalesce(creator, ''), coalesce(abstract, '') "
+        "FROM ml_setting.parameter_set WHERE %s IS NULL OR family = %s ORDER BY family, name, version;",
+        (family, family))
+
+    print('    %-16s %-24s %3s  %-7s %-6s %-14s %s' % ('family', 'name', 'v', 'category', 'frozen', 'creator', 'abstract'))
+
+    for f, n, v, c, fr, cr, ab in recs:
+        print('    %-16s %-24s %3s  %-7s %-6s %-14s %s' % (f, n, v, c, 'yes' if fr else '', cr[:14], ab[:60]))
+
+    return recs
+
+
 class Process_ml_setting:
     '''Processes of the root process ml_setting.'''
 
@@ -443,3 +623,46 @@ class Process_ml_setting:
 
             if 'plot_symbol' in families:
                 Fill_placeholder_plot_symbols(self.pg_session_C, self.verbose)
+
+        elif self.process_S.process.process == 'create_parameter_set':
+
+            self._Create_parameter_set()
+
+        elif self.process_S.process.process == 'list_parameter_sets':
+
+            family = str(getattr(self.process_S.process.parameters, 'family', '') or '').strip().lower()
+
+            List_parameter_sets(self.pg_session_C, family or None)
+
+    def _Create_parameter_set(self):
+
+        from src.lib.pilot import Get_project_path
+
+        p = self.process_S.process.parameters
+
+        settings_fp = str(getattr(p, 'settings_fp', '') or '').strip()
+
+        change = {}
+
+        if settings_fp:
+
+            fpn = os.path.expanduser(settings_fp)
+
+            if not os.path.isabs(fpn):
+                fpn = Get_project_path(self.project_root_FP, settings_fp)
+
+            if not os.path.exists(fpn):
+                print('    ERROR: settings_fp not found: %s' % fpn)
+                return
+
+            with open(fpn) as fh:
+                change = json.load(fh)
+
+        try:
+            Create_parameter_set(self.pg_session_C, getattr(p, 'family', ''), getattr(p, 'name', ''),
+                                 getattr(p, 'base_set', 'standard'), change,
+                                 str(getattr(p, 'abstract', '') or '').strip(), self.verbose)
+
+        except ValueError as e:
+            self.pg_session_C.conn.rollback()
+            print('    ERROR: %s' % e)

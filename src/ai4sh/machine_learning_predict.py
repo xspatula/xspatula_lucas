@@ -43,7 +43,7 @@ from src.ai4sh.machine_learning_preprocess import (_resolve_input_parquet, _reso
                                                    _is_spectral_col, _parse_array_param, _load_companion_json)
 from src.ai4sh.machine_learning_model import Manifest_fp, _compute_metrics
 from src.ai4sh.ml_setting import Is_path
-from src.ai4sh.ml_model import Registered_model
+from src.ai4sh.ml_model import Registered_model, Record_independent_metrics
 
 
 def Load_model(model_fp, verbose=1):
@@ -231,6 +231,7 @@ class Process_predict(Get_schema_table):
                     metrics = _compute_metrics(obs[eval_rows], pred[eval_rows])
                     metrics['n'] = int(eval_rows.sum())
                     model_D['independent_metrics'] = metrics
+                    Record_independent_metrics(self.pg_session_C, manifest['model_sha256'], parquet_fp, metrics, self.verbose)
                     if self.verbose >= 1:
                         print('    %s  independent: n=%d  r2=%.3f  rmse=%.3f  rpiq=%.3f'
                               % (col, metrics['n'], metrics['r2'], metrics['rmse'], metrics['rpiq']))

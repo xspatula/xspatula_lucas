@@ -48,6 +48,32 @@
           ]
         }
       ]
+    },
+    {
+      "process": "add_process",
+      "overwrite": false,
+      "parameters": {
+        "root_process": "ml_model",
+        "process": "retire_model",
+        "min_user_stratum": 4,
+        "title": "Retire registered models",
+        "label": "Sets the status of registered models to retired: they can no longer be applied by name. The record, metrics and frozen parameter sets are kept."
+      },
+      "nodes": [
+        {
+          "parent": "process",
+          "element": "parameters",
+          "parameter": [
+            {
+              "parameter": "model_array",
+              "parameter_type": "array",
+              "required": true,
+              "default_value": "",
+              "hint": "Comma separated list of registered model names."
+            }
+          ]
+        }
+      ]
     }
   ]
 }
