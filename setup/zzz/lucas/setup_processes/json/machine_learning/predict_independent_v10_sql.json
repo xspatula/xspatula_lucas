@@ -34,7 +34,7 @@
               "parameter_type": "array",
               "required": false,
               "default_value": "",
-              "hint": "Comma separated list of saved models (.joblib), paths relative to the project root. Each model needs its .manifest.json."
+              "hint": "Comma separated list of saved models: .joblib paths relative to the project root (each needs its .manifest.json) or names of registered models (ml_model.model)."
             },
             {
               "parameter": "dst_fp",

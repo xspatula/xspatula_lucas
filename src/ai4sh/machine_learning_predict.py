@@ -14,6 +14,9 @@ Load_model() checks the model file against the manifest sha256 and the software 
 takes unprocessed spectra with the model's bands (any column order) and returns predictions in the native unit
 of the indicator. Both are plain functions so that a server can use them without the process machinery.
 
+model_array entries are model files (.joblib) or names of registered models (ml_model.model); a registered model
+must also match the sha256 recorded when it was registered.
+
 The predict_independent process predicts every sample of a parquet with one or more models and saves
 <stem>_pred.parquet (key columns + one column per model) with a companion JSON in dst_fp (default
 <project_root_fp>/predictions, so the .previous_dataframe of the input folder is not changed). If the parquet also holds
@@ -39,6 +42,8 @@ from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.machine_learning_preprocess import (_resolve_input_parquet, _resolve_single_previous,
                                                    _is_spectral_col, _parse_array_param, _load_companion_json)
 from src.ai4sh.machine_learning_model import Manifest_fp, _compute_metrics
+from src.ai4sh.ml_setting import Is_path
+from src.ai4sh.ml_model import Registered_model
 
 
 def Load_model(model_fp, verbose=1):
@@ -186,13 +191,18 @@ class Process_predict(Get_schema_table):
 
         for model_param in model_array:
 
-            model_fp = self._Path(model_param)
-
             try:
+                registered_sha = None
+                if Is_path(model_param):
+                    model_fp = self._Path(model_param)
+                else:
+                    model_fp, registered_sha = Registered_model(self.pg_session_C, model_param)
                 model, manifest = Load_model(model_fp, self.verbose)
+                if registered_sha and manifest['model_sha256'] != registered_sha:
+                    raise ValueError('the model file is not the one registered as "%s"' % model_param)
                 pred = Predict_spectra(model, manifest, df, units_D)
             except ValueError as e:
-                print('    ERROR: %s: %s' % (os.path.basename(model_fp), e))
+                print('    ERROR: %s: %s' % (model_param, e))
                 continue
 
             indicator = manifest['indicator']

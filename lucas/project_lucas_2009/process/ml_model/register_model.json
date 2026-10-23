@@ -1,0 +1,14 @@
+{
+  "process": [
+    {
+      "process": "register_model",
+      "parameters": {
+        "model_array": [
+          "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm/models/lucas_2009_wetlab_foss-xds_10nm_ol_mc_tt/lucas_2009_wetlab_foss-xds_10nm_ol_mc_c-org_ols_tt.joblib"
+        ],
+        "name": "",
+        "abstract": ""
+      }
+    }
+  ]
+}

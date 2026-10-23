@@ -23,6 +23,8 @@ from src.ai4sh.provenance import Begin_provenance
 
 from src.ai4sh.ml_setting import Set_settings_session, Process_ml_setting, Fill_new_indicators
 
+from src.ai4sh.ml_model import Process_ml_model
+
 from src.lib.login import Get_set_database_session
 
 from src.utils import Log, Today_as_str_YYYYMMDD
@@ -160,6 +162,12 @@ def Run_process(structured_process_D, scheme_params_D):
                 setting_C = Process_ml_setting(process_S, pg_session_C, scheme_params_D['project_root_FP'])
 
                 setting_C._Sub_process(key)
+
+            elif root_process == 'ml_model':
+
+                registry_C = Process_ml_model(process_S, pg_session_C, scheme_params_D['project_root_FP'])
+
+                registry_C._Sub_process(key)
 
             elif root_process == 'pandas':
 

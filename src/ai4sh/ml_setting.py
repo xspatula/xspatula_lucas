@@ -237,10 +237,11 @@ def Spectra_colormap(param, verbose=1):
 
 def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'standardisation'),
                                   overwrite=False, verbose=1):
-    '''Create the per-indicator rows of every (not frozen) transformation / standardisation set.
+    '''Create the per-indicator rows of every transformation / standardisation set.
 
     Each indicator gets the value of the set's template (looked up by indicator name or alias), otherwise
-    linear / no standardisation. Existing rows are kept unless overwrite is True.
+    linear / no standardisation. Existing rows are kept unless overwrite is True. Frozen sets (used by a registered
+    model) only get rows for indicators that have none — a new indicator does not change what a model used.
     Returns {set name: number of rows written}.
     '''
     pg = pg_session_C
@@ -259,10 +260,10 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
 
         label = '%s/%s@%s' % (family, name, version)
 
-        if frozen:
-            if verbose >= 1:
-                print('    %s is frozen (used by a registered model) — skipped' % label)
-            continue
+        if frozen and overwrite and verbose >= 1:
+            print('    %s is frozen (used by a registered model) — only rows for new indicators are added' % label)
+
+        rewrite = overwrite and not frozen
 
         key = INDICATOR_FAMILIES[family]
 
@@ -279,7 +280,7 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
 
         for ind_id, ind_name, ind_alias in indicators:
 
-            if ind_id in existing and not overwrite:
+            if ind_id in existing and not rewrite:
                 continue
 
             match = next((k for k in (str(ind_name or '').lower(), str(ind_alias or '').lower()) if k in template), None)
@@ -315,7 +316,7 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
 
         if (verbose >= 1 and n) or verbose >= 2:
 
-            print('    %s: %d indicator row(s) written (%d already present)' % (label, n, len(existing) if not overwrite else 0))
+            print('    %s: %d indicator row(s) written (%d already present)' % (label, n, len(existing) if not rewrite else 0))
 
             unmatched = sorted(set(template) - used_keys - {str(i[1]).lower() for i in indicators} - {str(i[2]).lower() for i in indicators})
 

@@ -65,6 +65,12 @@
       "parameters": {
         "schema": "ml_setting"
       }
+    },
+    {
+      "process_id": "create_schema",
+      "parameters": {
+        "schema": "ml_model"
+      }
     }
   ]
 }
