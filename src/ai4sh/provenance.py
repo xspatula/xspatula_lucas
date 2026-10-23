@@ -108,6 +108,15 @@ def Load_config_json(fpn):
     return data
 
 
+def Record_config(key, content, sha256=None, **extra):
+    '''Record settings that did not come from a file (e.g. a database parameter set) in the provenance.'''
+
+    if sha256 is None:
+        sha256 = hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+    _STATE['configs'][key] = dict(extra, sha256=sha256, content=content)
+
+
 def File_sha256(fpn, chunk=1 << 20):
     '''sha256 of a file (read in chunks).'''
 

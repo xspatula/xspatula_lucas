@@ -1,0 +1,334 @@
+'''
+Created on 23 October 2026
+
+@author: thomasgumbricht
+
+Machine learning parameter sets from the database schema ml_setting.
+
+A parameter set is one named, versioned group of settings of one family (transformation, standardisation,
+chemometric, filter, multi_filter, selector, regressor, spectra_plot, plot_symbol, plot_layout), in one of three
+categories:
+
+    raw     library defaults / no operation          (name "none")
+    preset  curated settings                          (e.g. "standard", "savitzky-golay", "targetfeaturesymbols")
+    custom  settings defined by a user (stratum 4-5)
+
+ml_setting.parameter_set.content holds the settings in the same JSON shape as the files that used to be in
+<project>/default/. For the per-indicator families (transformation, standardisation) the content is the seed
+template keyed by indicator name or alias; the settings actually used are the rows of
+ml_setting.indicator_transformation / indicator_standardisation, created by sync_indicator_parameter_sets.
+
+A process parameter that names settings is resolved by Load_settings():
+
+    "" / "none" / "no"     → None (the caller's no-op / library defaults)
+    "default"              → the preset named default_name (normally "standard")
+    "<name>[@<version>]"   → that parameter set (latest version if none given)
+    path (contains "/", "~" or ends with .json) → the JSON file
+
+Every set loaded from the database is recorded in the provenance (src/ai4sh/provenance.py) with its id, version
+and content hash. Until the ml_setting schema exists the default files are used (one warning).
+'''
+
+# Standard library imports
+import os
+
+from src.ai4sh.provenance import Load_config_json, Record_config
+
+TARGET_TRANSFORMS = ('linear', 'log', 'sqrt', 'reciprocal', 'boxcox', 'yeojohnson', 'quantile')
+
+INDICATOR_FAMILIES = {'transformation': 'transformation', 'standardisation': 'standardise'}
+
+_SESSION = {'pg': None, 'ready': None, 'warned': False}
+
+
+def Set_settings_session(pg_session_C):
+    '''Database session used to read parameter sets (set by Run_process).'''
+
+    _SESSION.update(pg=pg_session_C, ready=None)
+
+
+def _Db_ready():
+    '''True if there is a session and the ml_setting schema exists (checked once per session).'''
+
+    if _SESSION['ready'] is None:
+
+        pg = _SESSION['pg']
+
+        try:
+            _SESSION['ready'] = bool(pg is not None and pg._Execute_search_single_sql(
+                "SELECT to_regclass('ml_setting.parameter_set') IS NOT NULL;")[0])
+
+        except Exception:
+            _Rollback()
+            _SESSION['ready'] = False
+
+    return _SESSION['ready']
+
+
+def _Rollback():
+    try:
+        _SESSION['pg'].conn.rollback()
+    except Exception:
+        pass
+
+
+def Is_path(param):
+    '''True if a settings parameter is a file path rather than a parameter set name.'''
+
+    s = str(param).strip()
+
+    return '/' in s or s.startswith('~') or s.lower().endswith('.json')
+
+
+def Get_parameter_set(family, name, version=None):
+    '''Return the parameter set row as a dict (latest version unless version is given), or None.'''
+
+    sql = ("SELECT id, family, name, version, category, frozen, content, content_hash "
+           "FROM ml_setting.parameter_set WHERE family = %s AND name = %s")
+
+    params = [family, name.lower()]
+
+    if version is not None:
+        sql += " AND version = %s"
+        params.append(int(version))
+
+    rec = _SESSION['pg']._Execute_search_single_sql(sql + " ORDER BY version DESC LIMIT 1;", params)
+
+    if rec is None:
+        return None
+
+    return dict(zip(('id', 'family', 'name', 'version', 'category', 'frozen', 'content', 'content_hash'), rec))
+
+
+def _Indicator_content(row, verbose=0):
+    '''Content in the file shape ({"transformation": {indicator: {transform: true}}} or {"standardise": {indicator: bool}})
+    built from the per-indicator rows of the set, keyed by both indicator name and alias.'''
+
+    pg = _SESSION['pg']
+
+    if row['family'] == 'transformation':
+
+        recs = pg._Execute_search_all_sql(
+            "SELECT i.name, i.alias, t.name FROM ml_setting.indicator_transformation x "
+            "JOIN observation_utility.indicator i ON i.id = x.indicator_id "
+            "JOIN ml_setting.transform t ON t.id = x.transform_id WHERE x.set_id = %s;", (row['id'],))
+
+        values = {r[:2]: ({} if r[2] == 'linear' else {r[2]: True}) for r in recs}
+
+    else:
+
+        recs = pg._Execute_search_all_sql(
+            "SELECT i.name, i.alias, x.standardise FROM ml_setting.indicator_standardisation x "
+            "JOIN observation_utility.indicator i ON i.id = x.indicator_id WHERE x.set_id = %s;", (row['id'],))
+
+        values = {r[:2]: bool(r[2]) for r in recs}
+
+    key = INDICATOR_FAMILIES[row['family']]
+
+    if not values:
+
+        if verbose >= 1 and row['category'] != 'raw':
+            print('    ⚠️  %s set "%s" has no per-indicator rows — using its template; run sync_indicator_parameter_sets'
+                  % (row['family'], row['name']))
+
+        return row['content'] or {key: {}}
+
+    out = {}
+
+    for (name, alias), value in values.items():
+
+        for k in (name, alias):
+            if k:
+                out[k] = value
+
+    return {key: out}
+
+
+def Load_settings(family, param, default_fpn=None, default_name='standard', resolve_path=None, verbose=1):
+    '''Return the settings named by param (see module docstring) as a dict, or None for none.
+
+    default_fpn: file used when the database is not available (transition from <project>/default/).
+    resolve_path: function resolving a relative file path (e.g. against the project root).
+    Raises ValueError for an unknown parameter set, FileNotFoundError for a missing file.
+    '''
+    s = str(param if param is not None else '').strip()
+
+    if s.lower() in ('', 'none', 'no'):
+        return None
+
+    if Is_path(s):
+
+        fpn = resolve_path(s) if resolve_path else os.path.expanduser(s)
+
+        if not os.path.exists(fpn):
+            raise FileNotFoundError('settings file not found: %s' % fpn)
+
+        return Load_config_json(fpn)
+
+    name, _, version = s.lower().partition('@')
+
+    if name == 'default':
+        name = default_name
+
+    if not _Db_ready():
+
+        if default_fpn and os.path.exists(default_fpn):
+
+            if not _SESSION['warned'] and verbose >= 1:
+                print('    ⚠️  ml_setting schema not available — using the default settings files')
+                _SESSION['warned'] = True
+
+            return Load_config_json(default_fpn)
+
+        raise ValueError('%s parameter set "%s" requested, but the ml_setting schema is not available' % (family, s))
+
+    try:
+        row = Get_parameter_set(family, name, version or None)
+    except Exception:
+        _Rollback()
+        raise
+
+    if row is None:
+        raise ValueError('no %s parameter set named "%s" in ml_setting.parameter_set' % (family, s))
+
+    content = _Indicator_content(row, verbose) if family in INDICATOR_FAMILIES else (row['content'] or {})
+
+    Record_config('db:ml_setting.parameter_set/%s/%s@%s' % (family, row['name'], row['version']),
+                  content, row['content_hash'], set_id=row['id'], category=row['category'])
+
+    return content
+
+
+def Spectra_colormap(param, verbose=1):
+    '''Colour ramp for plotting spectra: the given matplotlib name, or the spectra_plot set for "" / "default".'''
+
+    s = str(param if param is not None else '').strip()
+
+    if s and s.lower() != 'default':
+        return s
+
+    try:
+        return (Load_settings('spectra_plot', 'default', verbose=verbose) or {}).get('colormap', 'jet')
+    except ValueError:
+        return 'jet'
+
+
+# ------------------------------------------------------------------ per-indicator rows
+
+def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'standardisation'),
+                                  overwrite=False, verbose=1):
+    '''Create the per-indicator rows of every (not frozen) transformation / standardisation set.
+
+    Each indicator gets the value of the set's template (looked up by indicator name or alias), otherwise
+    linear / no standardisation. Existing rows are kept unless overwrite is True.
+    Returns {set name: number of rows written}.
+    '''
+    pg = pg_session_C
+
+    indicators = pg._Execute_search_all_sql("SELECT id, name, alias FROM observation_utility.indicator;")
+
+    transform_ids = dict(pg._Execute_search_all_sql("SELECT name, id FROM ml_setting.transform;"))
+
+    sets = pg._Execute_search_all_sql(
+        "SELECT id, family, name, version, frozen, content FROM ml_setting.parameter_set "
+        "WHERE family = ANY(%s) ORDER BY family, name, version;", (list(families),))
+
+    written = {}
+
+    for set_id, family, name, version, frozen, content in sets:
+
+        label = '%s/%s@%s' % (family, name, version)
+
+        if frozen:
+            if verbose >= 1:
+                print('    %s is frozen (used by a registered model) — skipped' % label)
+            continue
+
+        key = INDICATOR_FAMILIES[family]
+
+        template = {str(k).lower(): v for k, v in ((content or {}).get(key, {}) or {}).items()}
+
+        table = 'indicator_transformation' if family == 'transformation' else 'indicator_standardisation'
+
+        existing = {r[0] for r in pg._Execute_search_all_sql(
+            "SELECT indicator_id FROM ml_setting.%s WHERE set_id = %%s;" % table, (set_id,))}
+
+        used_keys = set()
+
+        n = 0
+
+        for ind_id, ind_name, ind_alias in indicators:
+
+            if ind_id in existing and not overwrite:
+                continue
+
+            match = next((k for k in (str(ind_name or '').lower(), str(ind_alias or '').lower()) if k in template), None)
+
+            if match:
+                used_keys.add(match)
+
+            value = template.get(match) if match else None
+
+            if family == 'transformation':
+
+                tname = next((t for t in TARGET_TRANSFORMS[1:] if (value or {}).get(t)), 'linear')
+
+                pg.cursor.execute(
+                    "INSERT INTO ml_setting.indicator_transformation (set_id, indicator_id, transform_id) "
+                    "VALUES (%s, %s, %s) ON CONFLICT (set_id, indicator_id) "
+                    "DO UPDATE SET transform_id = EXCLUDED.transform_id;",
+                    (set_id, ind_id, transform_ids[tname]))
+
+            else:
+
+                pg.cursor.execute(
+                    "INSERT INTO ml_setting.indicator_standardisation (set_id, indicator_id, standardise) "
+                    "VALUES (%s, %s, %s) ON CONFLICT (set_id, indicator_id) "
+                    "DO UPDATE SET standardise = EXCLUDED.standardise;",
+                    (set_id, ind_id, bool(value)))
+
+            n += 1
+
+        pg.conn.commit()
+
+        written[label] = n
+
+        if verbose >= 1:
+
+            print('    %s: %d indicator row(s) written (%d already present)' % (label, n, len(existing) if not overwrite else 0))
+
+            unmatched = sorted(set(template) - used_keys - {str(i[1]).lower() for i in indicators} - {str(i[2]).lower() for i in indicators})
+
+            if unmatched and verbose >= 2:
+                print('        template keys without an indicator in the database: %s' % ', '.join(unmatched))
+
+    return written
+
+
+class Process_ml_setting:
+    '''Processes of the root process ml_setting.'''
+
+    def __init__(self, process_S, pg_session_C, project_root_FP):
+        self.verbose = process_S.process.verbose
+        self.process_S = process_S
+        self.pg_session_C = pg_session_C
+        self.project_root_FP = project_root_FP
+
+    def _Sub_process(self, _):
+
+        if self.process_S.process.process == 'sync_indicator_parameter_sets':
+
+            p = self.process_S.process.parameters
+
+            from src.ai4sh.machine_learning_preprocess import _parse_array_param
+
+            families = _parse_array_param(getattr(p, 'family_array', [])) or list(INDICATOR_FAMILIES)
+
+            unknown = [f for f in families if f not in INDICATOR_FAMILIES]
+
+            if unknown:
+                print('    ERROR: family_array can only hold %s, got %s' % (list(INDICATOR_FAMILIES), unknown))
+                return
+
+            Sync_indicator_parameter_sets(self.pg_session_C, families,
+                                          bool(getattr(p, 'rebuild', False)), self.verbose)

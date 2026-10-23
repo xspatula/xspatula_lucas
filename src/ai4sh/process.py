@@ -21,6 +21,8 @@ from src.ai4sh.pandas_df_management import Process_pandas
 
 from src.ai4sh.provenance import Begin_provenance
 
+from src.ai4sh.ml_setting import Set_settings_session, Process_ml_setting
+
 from src.lib.login import Get_set_database_session
 
 from src.utils import Log, Today_as_str_YYYYMMDD
@@ -38,6 +40,9 @@ def Run_process(structured_process_D, scheme_params_D):
     if not user_status_D:
 
         return None
+
+    # Parameter sets (ml_setting schema) are read with the same session
+    Set_settings_session(pg_session_C)
     
     print ('\n########### STARTING PROCESSES ########### \n')
     
@@ -142,6 +147,12 @@ def Run_process(structured_process_D, scheme_params_D):
                 else:
                     ml_C = Process_ml_preprocess(process_S, pg_session_C, scheme_params_D['project_root_FP'])
                     ml_C._Sub_process(key)
+
+            elif root_process == 'ml_setting':
+
+                setting_C = Process_ml_setting(process_S, pg_session_C, scheme_params_D['project_root_FP'])
+
+                setting_C._Sub_process(key)
 
             elif root_process == 'pandas':
 

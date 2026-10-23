@@ -1,0 +1,11 @@
+{
+  "process": [
+    {
+      "process": "sync_indicator_parameter_sets",
+      "parameters": {
+        "family_array": ["transformation", "standardisation"],
+        "rebuild": false
+      }
+    }
+  ]
+}

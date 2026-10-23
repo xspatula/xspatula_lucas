@@ -61,7 +61,8 @@ from src.ai4sh.ml_transformers import (Chain_to_steps, Column_index, Holdout_tes
                                        Indicator_target_settings, RegressorFrame, Target_domain_mask)
 from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.project_paths import Default_fpn
-from src.ai4sh.provenance import Load_config_json, Provenance_snapshot, File_sha256
+from src.ai4sh.provenance import Provenance_snapshot, File_sha256
+from src.ai4sh.ml_setting import Load_settings, Is_path
 
 _DEFAULT_MODEL_PARAMS_FP = Default_fpn('regressors', 'regression_model_parameters.json')
 _DEFAULT_REGR_SYMBOLS_FP = Default_fpn('plot', 'regressionmodelsymbols.json')
@@ -299,20 +300,22 @@ class Process_regression_model(Get_schema_table):
         if self.process_S.process.process == 'regression_modeling':
             self._Regression_modeling()
 
-    def _resolve_symbols_fp(self, param_val, default_fp):
-        s = str(param_val).strip()
-        if not s or s.lower() == 'default':
-            return default_fp
-        if os.path.isabs(s):
+    def _Settings_fp(self, param):
+        '''A relative settings file path resolved against the project root; anything else (none, default,
+        parameter set name, absolute path) as is.'''
+        s = str(param).strip()
+        if not Is_path(s) or os.path.isabs(s):
             return s
         return Get_project_path(self.project_root_FP, s)
 
-    def _Settings_fp(self, param):
-        '''"none" / "default" as is; a relative path resolved against the project root.'''
-        s = str(param).strip()
-        if s.lower() in ('', 'none', 'default') or os.path.isabs(s):
-            return s
-        return Get_project_path(self.project_root_FP, s)
+    def _Settings(self, family, param, default_fpn, default_name='standard'):
+        '''Settings dict of a parameter set / file ({} for none; missing file → warning and {}).'''
+        try:
+            return Load_settings(family, param, default_fpn, default_name, self._Settings_fp, self.verbose) or {}
+        except FileNotFoundError as e:
+            if self.verbose >= 1:
+                print('    WARNING: %s' % e)
+            return {}
 
     def _Source_parquet(self, project_root_fp, companion):
         '''The unprocessed parquet a preprocessing chain starts from, or None (error printed).'''
@@ -339,13 +342,6 @@ class Process_regression_model(Get_schema_table):
                   % (os.path.basename(source_fp), key))
             return False
         return True
-
-    def _load_json_safe(self, fp, label):
-        if not os.path.exists(fp):
-            if self.verbose >= 1:
-                print('    WARNING: %s file not found: %s' % (label, fp))
-            return {}
-        return Load_config_json(fp)
 
     def _print_summary(self, results_D, indicator_cols, regressor_keys):
         modes = []
@@ -479,23 +475,19 @@ class Process_regression_model(Get_schema_table):
             print('    ERROR: no valid indicator columns.')
             return
 
-        if model_params_param and model_params_param.lower() not in ('default', 'none', ''):
-            mp_fp = (model_params_param if os.path.isabs(model_params_param)
-                     else Get_project_path(self.project_root_FP, model_params_param))
-        else:
-            mp_fp = _DEFAULT_MODEL_PARAMS_FP
-        model_params = self._load_json_safe(mp_fp, 'model_parameters')
+        # Settings: parameter set name (ml_setting), "default", "none" or a JSON path relative to the project root
+        model_params = self._Settings('regressor', model_params_param or 'default', _DEFAULT_MODEL_PARAMS_FP)
 
         # Indicator transformation and standardisation — only what the process sets, default none
         transformation_raw = _load_transform_config(self._Settings_fp(transformation_param),
                                                     _DEFAULT_TRANSFORMATION_FPN, self.verbose)
         standardise_raw    = _load_transform_config(self._Settings_fp(standardisation_param),
-                                                    _DEFAULT_STANDARDISE_FPN, self.verbose)
+                                                    _DEFAULT_STANDARDISE_FPN, self.verbose, 'standardisation')
 
-        regr_sym_fp  = self._resolve_symbols_fp(regr_sym_param, _DEFAULT_REGR_SYMBOLS_FP)
-        tgt_sym_fp   = self._resolve_symbols_fp(tgt_sym_param,  _DEFAULT_TARGET_SYMBOLS_FP)
-        regr_sym_raw = self._load_json_safe(regr_sym_fp, 'regressionmodelsymbols')
-        tgt_sym_raw  = self._load_json_safe(tgt_sym_fp,  'targetfeaturesymbols')
+        regr_sym_raw = self._Settings('plot_symbol', regr_sym_param or 'default', _DEFAULT_REGR_SYMBOLS_FP,
+                                      'regressionmodelsymbols')
+        tgt_sym_raw  = self._Settings('plot_symbol', tgt_sym_param or 'default', _DEFAULT_TARGET_SYMBOLS_FP,
+                                      'targetfeaturesymbols')
         regr_sym_D   = regr_sym_raw.get('regressionModelSymbols', regr_sym_raw)
         tgt_sym_D    = tgt_sym_raw.get('targetFeatureSymbols',    tgt_sym_raw)
 

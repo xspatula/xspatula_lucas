@@ -13,7 +13,7 @@ from scipy.stats import boxcox
 from sklearn.preprocessing import PowerTransformer, QuantileTransformer, normalize
 from sklearn.decomposition import PCA
 from src.ai4sh.project_paths import Default_fpn
-from src.ai4sh.provenance import Load_config_json
+from src.ai4sh.ml_setting import Load_settings
 
 _DEFAULT_STANDARDISE_FPN = Default_fpn('transform', 'indicator_standardise_default.json')
 
@@ -22,26 +22,24 @@ _DEFAULT_TRANSFORMATION_FPN = Default_fpn('transform', 'indicator_transformation
 _DEFAULT_CHEMOMETRIC_FPN = Default_fpn('chemometric', 'chemometric_default.json')
 
 
-def _load_transform_config(param, default_fpn, verbose):
-    if not param or str(param).strip().lower() == 'none':
-        return None
-    fpn = default_fpn if str(param).strip().lower() == 'default' else str(param).strip()
-    if not os.path.exists(fpn):
+def _load_transform_config(param, default_fpn, verbose, family='transformation'):
+    '''param: none | default | parameter set name (ml_setting) | path to a transformation / standardise JSON.'''
+    try:
+        return Load_settings(family, param, default_fpn, verbose=verbose)
+    except FileNotFoundError as e:
         if verbose >= 1:
-            print('    Warning: transform config not found: %s' % fpn)
+            print('    Warning: %s' % e)
         return None
-    return Load_config_json(fpn)
 
 
 def _load_chemometric_config(param, verbose=0):
-    if not param or str(param).strip().lower() == 'none':
-        return {}
-    fpn = _DEFAULT_CHEMOMETRIC_FPN if str(param).strip().lower() == 'default' else str(param).strip()
-    if not os.path.exists(fpn):
+    '''param: none | default | parameter set name (ml_setting) | path to a chemometric JSON.'''
+    try:
+        return Load_settings('chemometric', param, _DEFAULT_CHEMOMETRIC_FPN, verbose=verbose) or {}
+    except FileNotFoundError as e:
         if verbose >= 1:
-            print('    Warning: chemometric config not found: %s' % fpn)
+            print('    Warning: %s' % e)
         return {}
-    return Load_config_json(fpn)
 
 
 def _snv(X):
@@ -81,7 +79,7 @@ def _Mask_outside_domain(series, outside, col, transform, condition):
 def apply_transformations(df, indicators, param, verbose=0):
     '''Apply per-indicator transformations to a copy of df.
 
-    param: 'default' | 'none' | path to transformation JSON
+    param: 'default' | 'none' | parameter set name | path to transformation JSON
     Returns (df_out, transform_dict) where transform_dict[col] names the applied transform.
     '''
     transform_dict = {col: 'linear' for col in indicators}
@@ -151,12 +149,12 @@ def apply_transformations(df, indicators, param, verbose=0):
 def apply_standardisation(df, indicators, param, verbose=0):
     '''Apply z-score standardisation to a copy of df for selected indicators.
 
-    param: 'default' | 'none' | path to standardisation JSON
+    param: 'default' | 'none' | parameter set name | path to standardisation JSON
     Returns (df_out, standard_dict) where standard_dict[col] is a stats dict or 'none'.
     '''
     standard_dict = {col: 'none' for col in indicators}
 
-    raw = _load_transform_config(param, _DEFAULT_STANDARDISE_FPN, verbose)
+    raw = _load_transform_config(param, _DEFAULT_STANDARDISE_FPN, verbose, 'standardisation')
     if raw is None:
         return df.copy(), standard_dict
 

@@ -29,6 +29,7 @@ from src.ai4sh.chemometrics import (apply_transformations, apply_standardisation
 from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_config
 
 from src.ai4sh.feature_symbols import Load_feature_symbols
+from src.ai4sh.ml_setting import Spectra_colormap
 
 from src.ai4sh.parquet_units import Read_parquet_with_units, Find_selected_parquet
 
@@ -752,7 +753,7 @@ class Process_plot(Get_schema_table):
             print('    Plotting %d of %d spectra (%d bands, skip=%d)' % (
                 n_plot, n_total, len(spectral_cols), skip))
 
-        colormap = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
         colors = plt.get_cmap(colormap)(np.linspace(0, 1, n_plot))
 
         show = getattr(p, 'show', True)
@@ -843,7 +844,7 @@ class Process_plot(Get_schema_table):
         if self.verbose >= 1:
             print('    Loaded %d spectra, plotting %d (skip=%d)' % (n_total, n_plot, skip))
 
-        colormap = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
         colors = plt.get_cmap(colormap)(np.linspace(0, 1, n_plot))
 
         bw = params_D.get('output_bandwidth', '')

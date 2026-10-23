@@ -59,6 +59,12 @@
       "parameters": {
         "schema": "observation"
       }
+    },
+    {
+      "process_id": "create_schema",
+      "parameters": {
+        "schema": "ml_setting"
+      }
     }
   ]
 }

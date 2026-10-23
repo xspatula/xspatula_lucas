@@ -39,6 +39,7 @@ from src.postgres import Get_schema_table
 from src.lib.pilot import Get_project_path
 from src.ai4sh.project_paths import Default_fpn
 from src.ai4sh.provenance import Load_config_json
+from src.ai4sh.ml_setting import Load_settings, Is_path, Spectra_colormap
 from src.ai4sh.ml_transformers import Holdout_test_mask, Holdout_info
 
 _METADATA_COLS = frozenset([
@@ -901,7 +902,7 @@ class Process_ml_preprocess(Get_schema_table):
         save        = getattr(p, 'save', False)
         overwrite   = bool(getattr(p, 'overwrite', False))
         max_spectra = int(getattr(p, 'max_spectra', 100))
-        colormap    = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap    = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
 
         if dataframe_param.lower() == 'previous':
             parquet_fp = _resolve_single_previous(project_root_fp)
@@ -1067,6 +1068,16 @@ class Process_ml_preprocess(Get_schema_table):
             return s
         return Get_project_path(self.project_root_FP, s)
 
+    def _Load_named_settings(self, family, param, default_fpn=None):
+        '''Settings of a parameter set name (ml_setting), "default" or a JSON path relative to the project root;
+        {} for none or a missing file (warning).'''
+        try:
+            return Load_settings(family, param, default_fpn, resolve_path=self._Resolve_filter_fp,
+                                 verbose=self.verbose) or {}
+        except FileNotFoundError as e:
+            print('    ERROR: %s' % e)
+            return {}
+
     def _Filter_spectra(self):
         p = self.process_S.process.parameters
 
@@ -1078,15 +1089,10 @@ class Process_ml_preprocess(Get_schema_table):
             return
 
         filter_fp_param = str(getattr(p, 'filter_fp', 'none')).strip()
-        filter_fp       = self._Resolve_filter_fp(filter_fp_param)
-        if filter_fp is None:
-            print('    ERROR: filter_fp is required for filter_spectra.')
+        filter_cfg      = self._Load_named_settings('filter', filter_fp_param)
+        if not filter_cfg:
+            print('    ERROR: filter_fp (a filter parameter set name or JSON file) is required for filter_spectra.')
             return
-        if not os.path.exists(filter_fp):
-            print('    ERROR: filter file not found: %s' % filter_fp)
-            return
-
-        filter_cfg = Load_config_json(filter_fp)
 
         # Abbreviation from top-level key
         _abbrev_map = {'savitzky-golay': 'sg', 'gauss': 'gf',
@@ -1098,7 +1104,7 @@ class Process_ml_preprocess(Get_schema_table):
         save            = getattr(p, 'save', False)
         overwrite       = bool(getattr(p, 'overwrite', False))
         max_spectra     = int(getattr(p, 'max_spectra', 100))
-        colormap        = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap        = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
 
         if dataframe_param.lower() == 'previous':
             parquet_fp = _resolve_single_previous(project_root_fp)
@@ -1161,22 +1167,17 @@ class Process_ml_preprocess(Get_schema_table):
 
         mf_fp_param = str(getattr(p, 'multi_filter_fp',
                            getattr(p, 'mulit_filter_fp', 'none'))).strip()
-        mf_fp = self._Resolve_filter_fp(mf_fp_param)
-        if mf_fp is None:
-            print('    ERROR: multi_filter_fp is required for multi_filter_spectra.')
+        mf_cfg = self._Load_named_settings('multi_filter', mf_fp_param)
+        if not mf_cfg:
+            print('    ERROR: multi_filter_fp (a multi_filter parameter set name or JSON file) is required.')
             return
-        if not os.path.exists(mf_fp):
-            print('    ERROR: multi-filter file not found: %s' % mf_fp)
-            return
-
-        mf_cfg = Load_config_json(mf_fp)
 
         dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
         show            = getattr(p, 'show', True)
         save            = getattr(p, 'save', False)
         overwrite       = bool(getattr(p, 'overwrite', False))
         max_spectra     = int(getattr(p, 'max_spectra', 100))
-        colormap        = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap        = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
 
         if dataframe_param.lower() == 'previous':
             parquet_fp = _resolve_single_previous(project_root_fp)
@@ -1286,7 +1287,7 @@ class Process_ml_preprocess(Get_schema_table):
         save            = getattr(p, 'save', False)
         overwrite       = bool(getattr(p, 'overwrite', False))
         max_spectra     = int(getattr(p, 'max_spectra', 100))
-        colormap        = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap        = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
 
         if dataframe_param.lower() == 'previous':
             parquet_fp = _resolve_single_previous(project_root_fp)
@@ -1460,7 +1461,7 @@ class Process_ml_preprocess(Get_schema_table):
         save                = getattr(p, 'save', False)
         overwrite           = bool(getattr(p, 'overwrite', False))
         max_spectra         = int(getattr(p, 'max_spectra', 100))
-        colormap            = str(getattr(p, 'colormap', 'jet')).strip() or 'jet'
+        colormap            = Spectra_colormap(getattr(p, 'colormap', 'default'), self.verbose)
 
         if dataframe_param.lower() == 'previous':
             parquet_fp = _resolve_single_previous(project_root_fp)
@@ -1677,27 +1678,17 @@ class Process_ml_preprocess(Get_schema_table):
             print('    ERROR: regressor_array is required for permutation / rfe selectors.')
             return
 
-        # Model hyperparameters
-        if model_params_param and model_params_param.lower() not in ('default', 'none', ''):
-            mp_fp = (model_params_param if os.path.isabs(model_params_param)
-                     else Get_project_path(self.project_root_FP, model_params_param))
-        else:
-            mp_fp = _DEFAULT_MODEL_PARAMS_FP
-        model_params = {}
-        if os.path.exists(mp_fp):
-            model_params = Load_config_json(mp_fp)
-        elif self.verbose >= 1:
-            print('    WARNING: model_parameters file not found: %s' % mp_fp)
-
-        # Selector defaults
-        sel_defaults_fp = Default_fpn('selector', 'selector_default_settings.json')
-        sel_defaults = {}
-        if os.path.exists(sel_defaults_fp):
-            sel_defaults = Load_config_json(sel_defaults_fp)
-        perm_repeats = int(sel_defaults.get('permutation_selector', {}).get('permutation_repeats', 6))
+        # Model hyperparameters and selector settings (parameter set name, default, none or JSON path)
+        model_params = self._Load_named_settings('regressor', model_params_param or 'default', _DEFAULT_MODEL_PARAMS_FP)
+        sel_defaults = self._Load_named_settings('selector', 'default',
+                                                 Default_fpn('selector', 'selector_default_settings.json'))
+        # keys of the settings file: permutation / tree_based (older code read permutation_selector / tree_based_selector)
+        perm_cfg     = sel_defaults.get('permutation', sel_defaults.get('permutation_selector', {}))
+        tree_cfg     = sel_defaults.get('tree_based', sel_defaults.get('tree_based_selector', {}))
+        perm_repeats = int(perm_cfg.get('permutation_repeats', 6))
         rfe_cv       = int(sel_defaults.get('rfe', {}).get('CV', 0))
         rfe_step     = int(sel_defaults.get('rfe', {}).get('step', 1))
-        tree_n_est   = int(sel_defaults.get('tree_based_selector', {}).get('n_estimators', 20))
+        tree_n_est   = int(tree_cfg.get('n_estimators', 20))
 
         # Load parquet
         if dataframe_param.lower() == 'previous':

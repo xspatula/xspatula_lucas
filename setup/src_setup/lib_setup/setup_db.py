@@ -26,6 +26,7 @@ from os import path
 
 # Third-party imports
 from psycopg2 import sql as pgsql
+from psycopg2.extras import Json
 
 # Package application imports
 
@@ -726,6 +727,8 @@ class PG_session:
 
         TEXT_TYPES = {'text', 'character varying', 'character'}
 
+        JSON_TYPES = {'json', 'jsonb'}
+
         text_unique_cols = {col for col in unique_cols if col_types.get(col) in TEXT_TYPES}
 
         for values in valueL:
@@ -811,6 +814,12 @@ class PG_session:
             insert_values = [
                 v.lower() if (isinstance(v, str) and columns[i].lower().strip() in text_unique_cols) else v
                 for i, v in enumerate(values)
+            ]
+
+            # JSON objects/arrays given for json/jsonb columns (e.g. ml_setting.parameter_set.content)
+            insert_values = [
+                Json(v) if (isinstance(v, (dict, list)) and col_types.get(columns[i].lower().strip()) in JSON_TYPES) else v
+                for i, v in enumerate(insert_values)
             ]
 
             if self.verbose > 1:
