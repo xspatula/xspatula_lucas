@@ -57,7 +57,7 @@
               "parameter_type": "test",
               "required": false,
               "default_value": "",
-              "hint": "Relative or absolute path to the JSON file with the multi_filter definition. If not set or set to none the default settings in the sci-kit learn package will be used."
+              "hint": "Regressor hyper-parameters: default (the standard regressor set), none (scikit-learn defaults), a parameter set name[@version] or a JSON file path relative to the project root."
             },
             {
               "parameter": "traintest",
@@ -85,14 +85,14 @@
               "parameter_type": "text",
               "required": false,
               "default_value": "none",
-              "hint": "Transformation of the indicator(s) before modeling: none, default (the default transformation settings) or the path (relative to the project root) of a transformation JSON. Fitted on the training samples; predictions are returned in the native unit."
+              "hint": "Transformation of the indicator(s) before modeling: none, default (the standard set), a parameter set name[@version] or a JSON file path relative to the project root. Fitted on the training samples; predictions are returned in the native unit."
             },
             {
               "parameter": "indicator_standardisation",
               "parameter_type": "text",
               "required": false,
               "default_value": "none",
-              "hint": "Z-score standardisation of the indicator(s) before modeling: none, default (the default standardise settings) or the path (relative to the project root) of a standardise JSON. Fitted on the training samples; predictions are returned in the native unit."
+              "hint": "Z-score standardisation of the indicator(s) before modeling: none, default (the standard set), a parameter set name[@version] or a JSON file path relative to the project root."
             },
             {
               "parameter": "refit_preprocessing",
