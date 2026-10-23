@@ -1495,7 +1495,6 @@ def Setup_schemas_tables(scheme_params_D, pilot_L):
 
     # To delete the complete database, open a session with the database source and delete
 
-    print (user_parameter)
 
     if user_parameter['process'][0]['process_id'] == 'delete_database' and user_parameter['process'][0]['delete']:
 
