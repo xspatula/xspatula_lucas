@@ -105,6 +105,8 @@ setup/zzz/lucas/setup_db/json/audit/audit_triggers_organism_utility_v10_sql.json
 setup/zzz/lucas/setup_db/json/audit/audit_triggers_organism_v10_sql.json
 setup/zzz/lucas/setup_db/json/audit/audit_triggers_process_v10_sql.json
 setup/zzz/lucas/setup_db/json/audit/audit_triggers_utility_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_ml_model_v10_sql.json
+setup/zzz/lucas/setup_db/json/audit/audit_triggers_ml_setting_v10_sql.json
 
 
 
