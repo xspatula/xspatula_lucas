@@ -780,7 +780,7 @@ class Process_plot(Get_schema_table):
 
         # Apply filter (multi_filter takes priority)
         if multi_filter_param.lower() not in ('none', 'no', ''):
-            multi_cfg = _load_filter_config(multi_filter_param)
+            multi_cfg = _load_filter_config(multi_filter_param, 'multi_filter')
             if multi_cfg is not None:
                 df_f, cols_f, flabel = apply_multi_filter(base_df, base_cols, multi_cfg)
                 panels.append((flabel, df_f, cols_f))

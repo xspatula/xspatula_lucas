@@ -24,16 +24,18 @@ _FILTER_DEFAULT_FILES = {
 }
 
 
-def _load_filter_config(param):
+def _load_filter_config(param, family='filter'):
     '''Load filter config dict from param.
 
     param=None / "none" / "no" → None (no filtering).
-    param=filter-name           → the filter parameter set of that name (ml_setting; file default/filter/ until set up).
+    param=set name              → the filter (or multi_filter) parameter set of that name (ml_setting; file
+                                  default/filter/ until set up).
     param=path string           → load from that path.
     '''
     name = str(param).strip().lower() if param is not None else ''
-    default_fpn = str(_DEFAULT_FILTER_DIR / _FILTER_DEFAULT_FILES[name]) if name in _FILTER_DEFAULT_FILES else None
-    return Load_settings('filter', param, default_fpn)
+    default_fpn = str(_DEFAULT_FILTER_DIR / _FILTER_DEFAULT_FILES[name]) \
+        if family == 'filter' and name in _FILTER_DEFAULT_FILES else None
+    return Load_settings(family, param, default_fpn)
 
 
 def _lowess_1d(y, n_points):
