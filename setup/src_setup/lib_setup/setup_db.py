@@ -42,6 +42,17 @@ REVOKE_D = Read_json(path.join(_LIB_SETUP_DIR, 'revoke_privileges.json'))
 
 ROLES_D = Read_json(path.join(_LIB_SETUP_DIR, 'roles_grants.json'))
 
+def _Unstruct(value):
+    '''Plain dicts/lists from Struct-wrapped JSON (the process parameters are Struct objects).'''
+
+    if isinstance(value, Struct):
+        return {k: _Unstruct(v) for k, v in vars(value).items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_Unstruct(v) for v in value]
+
+    return value
+
 class parameter():
     """
     @brief Parameter manager for PostgreSQL setup workflows.
@@ -818,7 +829,7 @@ class PG_session:
 
             # JSON objects/arrays given for json/jsonb columns (e.g. ml_setting.parameter_set.content)
             insert_values = [
-                Json(v) if (isinstance(v, (dict, list)) and col_types.get(columns[i].lower().strip()) in JSON_TYPES) else v
+                Json(_Unstruct(v)) if (isinstance(v, (Struct, dict, list)) and col_types.get(columns[i].lower().strip()) in JSON_TYPES) else v
                 for i, v in enumerate(insert_values)
             ]
 
