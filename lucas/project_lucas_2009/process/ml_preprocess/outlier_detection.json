@@ -3,7 +3,7 @@
     {
       "process": "detect_outliers",
       "parameters": {
-        "project_root_fp": "./project_lucas_2009/data/compiled/lucas_2009_10nm",
+        "project_root_fp": "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm",
         "indicator_array": [
           "sand",
           "c-org"
