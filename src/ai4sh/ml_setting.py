@@ -27,16 +27,27 @@ A process parameter that names settings is resolved by Load_settings():
 
 Every set loaded from the database is recorded in the provenance (src/ai4sh/provenance.py) with its id, version
 and content hash. Until the ml_setting schema exists the default files are used (one warning).
+
+New indicators (Fill_new_indicators, run by Run_process after manage_indicator) get a row in every transformation /
+standardisation set and a grey placeholder symbol ("needs_review": true) in every plot_symbol set of target features.
 '''
 
 # Standard library imports
 import os
+import json
+import hashlib
 
 from src.ai4sh.provenance import Load_config_json, Record_config
 
 TARGET_TRANSFORMS = ('linear', 'log', 'sqrt', 'reciprocal', 'boxcox', 'yeojohnson', 'quantile')
 
 INDICATOR_FAMILIES = {'transformation': 'transformation', 'standardisation': 'standardise'}
+
+SYNC_FAMILIES = ('transformation', 'standardisation', 'plot_symbol')
+
+TARGET_SYMBOLS_KEY = 'targetFeatureSymbols'
+
+PLACEHOLDER_SYMBOL = {'color': 'grey', 'alpha': 0.2, 'unit': 'native', 'needs_review': True}
 
 _SESSION = {'pg': None, 'ready': None, 'warned': False}
 
@@ -70,6 +81,12 @@ def _Rollback():
         _SESSION['pg'].conn.rollback()
     except Exception:
         pass
+
+
+def Content_hash(content):
+    '''sha256 of the content as stored in parameter_set.content_hash (sorted keys, compact JSON).'''
+
+    return hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
 def Is_path(param):
@@ -191,10 +208,13 @@ def Load_settings(family, param, default_fpn=None, default_name='standard', reso
     if row is None:
         raise ValueError('no %s parameter set named "%s" in ml_setting.parameter_set' % (family, s))
 
-    content = _Indicator_content(row, verbose) if family in INDICATOR_FAMILIES else (row['content'] or {})
+    if family in INDICATOR_FAMILIES:
+        content, sha256 = _Indicator_content(row, verbose), None   # built from the rows: hash what is used
+    else:
+        content, sha256 = row['content'] or {}, row['content_hash']
 
     Record_config('db:ml_setting.parameter_set/%s/%s@%s' % (family, row['name'], row['version']),
-                  content, row['content_hash'], set_id=row['id'], category=row['category'])
+                  content, sha256, set_id=row['id'], category=row['category'])
 
     return content
 
@@ -293,7 +313,7 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
 
         written[label] = n
 
-        if verbose >= 1:
+        if (verbose >= 1 and n) or verbose >= 2:
 
             print('    %s: %d indicator row(s) written (%d already present)' % (label, n, len(existing) if not overwrite else 0))
 
@@ -303,6 +323,90 @@ def Sync_indicator_parameter_sets(pg_session_C, families=('transformation', 'sta
                 print('        template keys without an indicator in the database: %s' % ', '.join(unmatched))
 
     return written
+
+
+def Fill_placeholder_plot_symbols(pg_session_C, verbose=1):
+    '''Add a grey placeholder symbol ("needs_review": true) for every indicator that has no entry (by name or alias)
+    in a not frozen plot_symbol set of target features. Returns {set label: [indicator keys added]}.'''
+
+    pg = pg_session_C
+
+    indicators = pg._Execute_search_all_sql("SELECT name, alias, display_name FROM observation_utility.indicator ORDER BY name;")
+
+    sets = pg._Execute_search_all_sql(
+        "SELECT id, name, version, frozen, content FROM ml_setting.parameter_set "
+        "WHERE family = 'plot_symbol' ORDER BY name, version;")
+
+    added_D = {}
+
+    for set_id, name, version, frozen, content in sets:
+
+        symbols = (content or {}).get(TARGET_SYMBOLS_KEY)
+
+        if not isinstance(symbols, dict):
+            continue  # e.g. regressionmodelsymbols (keyed by regressor, not indicator)
+
+        label = 'plot_symbol/%s@%s' % (name, version)
+
+        known = {str(k).lower() for k in symbols}
+
+        missing = [(n, a, d) for n, a, d in indicators
+                   if str(n or '').lower() not in known and str(a or '').lower() not in known]
+
+        if not missing:
+            continue
+
+        if frozen:
+            if verbose >= 1:
+                print('    %s is frozen (used by a registered model) — %d indicator(s) without symbol not added'
+                      % (label, len(missing)))
+            continue
+
+        added = []
+
+        for n, a, d in missing:
+            key = str(a or n).lower()
+            symbols[key] = dict(PLACEHOLDER_SYMBOL, label=d or a or n)
+            added.append(key)
+
+        pg.cursor.execute("UPDATE ml_setting.parameter_set SET content = %s::jsonb, content_hash = %s WHERE id = %s;",
+                          (json.dumps(content), Content_hash(content), set_id))
+        pg.conn.commit()
+
+        added_D[label] = added
+
+        if verbose >= 1:
+            print('    ⚠️  %s: grey placeholder symbol added for %d indicator(s) — set colour and label: %s'
+                  % (label, len(added), ', '.join(added)))
+
+    return added_D
+
+
+def Fill_new_indicators(pg_session_C, verbose=1):
+    '''Give indicators without ml settings their per-indicator rows and placeholder plot symbols.
+
+    Called by Run_process after manage_indicator. Never raises: a failure here must not hide that the indicator
+    itself was inserted (run sync_indicator_parameter_sets to repeat).'''
+
+    pg = pg_session_C
+
+    try:
+        if not pg._Execute_search_single_sql("SELECT to_regclass('ml_setting.parameter_set') IS NOT NULL;")[0]:
+            return None
+
+        return {'rows': Sync_indicator_parameter_sets(pg, verbose=verbose),
+                'plot_symbols': Fill_placeholder_plot_symbols(pg, verbose)}
+
+    except Exception as e:
+
+        try:
+            pg.conn.rollback()
+        except Exception:
+            pass
+
+        print('    ⚠️  ml settings for new indicators not filled (%s) — run sync_indicator_parameter_sets' % e)
+
+        return None
 
 
 class Process_ml_setting:
@@ -322,13 +426,19 @@ class Process_ml_setting:
 
             from src.ai4sh.machine_learning_preprocess import _parse_array_param
 
-            families = _parse_array_param(getattr(p, 'family_array', [])) or list(INDICATOR_FAMILIES)
+            families = _parse_array_param(getattr(p, 'family_array', [])) or list(SYNC_FAMILIES)
 
-            unknown = [f for f in families if f not in INDICATOR_FAMILIES]
+            unknown = [f for f in families if f not in SYNC_FAMILIES]
 
             if unknown:
-                print('    ERROR: family_array can only hold %s, got %s' % (list(INDICATOR_FAMILIES), unknown))
+                print('    ERROR: family_array can only hold %s, got %s' % (list(SYNC_FAMILIES), unknown))
                 return
 
-            Sync_indicator_parameter_sets(self.pg_session_C, families,
-                                          bool(getattr(p, 'rebuild', False)), self.verbose)
+            row_families = [f for f in families if f in INDICATOR_FAMILIES]
+
+            if row_families:
+                Sync_indicator_parameter_sets(self.pg_session_C, row_families,
+                                              bool(getattr(p, 'rebuild', False)), self.verbose)
+
+            if 'plot_symbol' in families:
+                Fill_placeholder_plot_symbols(self.pg_session_C, self.verbose)

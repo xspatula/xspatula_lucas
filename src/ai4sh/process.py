@@ -21,7 +21,7 @@ from src.ai4sh.pandas_df_management import Process_pandas
 
 from src.ai4sh.provenance import Begin_provenance
 
-from src.ai4sh.ml_setting import Set_settings_session, Process_ml_setting
+from src.ai4sh.ml_setting import Set_settings_session, Process_ml_setting, Fill_new_indicators
 
 from src.lib.login import Get_set_database_session
 
@@ -43,6 +43,9 @@ def Run_process(structured_process_D, scheme_params_D):
 
     # Parameter sets (ml_setting schema) are read with the same session
     Set_settings_session(pg_session_C)
+
+    # Set when a process inserts indicators: they get their ml settings after the last process
+    new_indicators = False
     
     print ('\n########### STARTING PROCESSES ########### \n')
     
@@ -76,6 +79,10 @@ def Run_process(structured_process_D, scheme_params_D):
                 continue
         
             root_process = process_S.process.root_process
+
+            if 'manage_indicator' in (process_S.process.process, getattr(process_S.process.parameters, 'process', None)):
+
+                new_indicators = new_indicators or not process_S.process.delete
 
             Begin_provenance(process_S, key)
 
@@ -170,6 +177,10 @@ def Run_process(structured_process_D, scheme_params_D):
                 Log(error_msg)
 
                 return
+
+    if new_indicators and pg_session_C is not None:
+
+        Fill_new_indicators(pg_session_C, scheme_params_D['process'][0]['verbose'])
 
     if pg_session_C is not None:
 

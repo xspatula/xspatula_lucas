@@ -16,8 +16,8 @@
         "root_process": "ml_setting",
         "process": "sync_indicator_parameter_sets",
         "min_user_stratum": 4,
-        "title": "Create the per-indicator rows of the indicator transformation and standardisation parameter sets",
-        "label": "For every indicator in observation_utility.indicator, write a row in each (not frozen) transformation / standardisation parameter set, with the value of the set template (by indicator name or alias) or linear / no standardisation. Run after inserting indicators."
+        "title": "Create the per-indicator rows of the transformation and standardisation parameter sets and placeholder plot symbols",
+        "label": "For every indicator in observation_utility.indicator, write a row in each (not frozen) transformation / standardisation parameter set, with the value of the set template (by indicator name or alias) or linear / no standardisation, and a grey placeholder plot symbol for indicators without one. Runs automatically after manage_indicator."
       },
       "nodes": [
         {
@@ -29,7 +29,7 @@
               "parameter_type": "array",
               "required": false,
               "default_value": "",
-              "hint": "Families to sync: transformation, standardisation (empty = both)."
+              "hint": "Families to sync: transformation, standardisation, plot_symbol (empty = all three). plot_symbol adds a grey placeholder symbol (needs_review) for indicators without one."
             },
             {
               "parameter": "rebuild",
