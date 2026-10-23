@@ -26,6 +26,7 @@ from os import path
 
 # Third-party imports
 from psycopg2 import sql as pgsql
+from psycopg2.extras import Json
 
 # Package application imports
 
@@ -40,6 +41,17 @@ _LIB_SETUP_DIR = path.dirname(path.abspath(__file__))
 REVOKE_D = Read_json(path.join(_LIB_SETUP_DIR, 'revoke_privileges.json'))
 
 ROLES_D = Read_json(path.join(_LIB_SETUP_DIR, 'roles_grants.json'))
+
+def _Unstruct(value):
+    '''Plain dicts/lists from Struct-wrapped JSON (the process parameters are Struct objects).'''
+
+    if isinstance(value, Struct):
+        return {k: _Unstruct(v) for k, v in vars(value).items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_Unstruct(v) for v in value]
+
+    return value
 
 class parameter():
     """
@@ -174,7 +186,8 @@ class PG_session:
 
             elif process.process_id == 'create_table':
 
-                self._Create_table(process.parameters.schema,process.parameters.table,process.parameters.command)
+                self._Create_table(process.parameters.schema,process.parameters.table,process.parameters.command,
+                                   getattr(process.parameters, 'index', None), getattr(process.parameters, 'comment', None))
 
             elif process.process_id == 'table_insert':
 
@@ -287,9 +300,14 @@ class PG_session:
 
         self.conn.commit()
 
-    def _Create_table(self,schema,table,cmd):
+    def _Create_table(self,schema,table,cmd,index=None,comment=None):
         """
         @brief Creates a PostgreSQL table in the specified schema, with options to overwrite or delete if it exists.
+
+        Optional declarative extras, given next to "command" in the create_table block and
+        applied idempotently whether the table is new or already exists (see _Table_extras):
+            "index":   [["col"], ["col_a", "col_b"]]   - one btree index per column list
+            "comment": {"table": "...", "columns": {"col": "..."}}
 
         This method checks if the specified table exists in the given schema. If the table exists and the
         overwrite or delete flags are set, the table is dropped and optionally recreated. If the delete flag
@@ -350,6 +368,8 @@ class PG_session:
 
                     print ('.   table %s.%s already exists' %(schema, table))
 
+                self._Table_extras(schema, table, index, comment)
+
                 return
 
         elif self.verbose:
@@ -370,6 +390,59 @@ class PG_session:
         )
 
         self.conn.commit()
+
+        self._Table_extras(schema, table, index, comment)
+
+    def _Table_extras(self, schema, table, index, comment):
+        """
+        @brief Applies the optional declarative index and comment keys of a create_table block.
+
+        @details Idempotent, so it runs on every setup pass: indexes use CREATE INDEX IF NOT
+        EXISTS (named <table>_<col>[_<col>]_idx) and COMMENT ON simply replaces the
+        comment. Identifiers go through pgsql.Identifier, comment texts as parameters.
+
+        @param index List of column-name lists, one index each, or None.
+        @param comment Struct/dict with optional "table" (text) and "columns" ({column: text}), or None.
+
+        @return None
+        """
+
+        for column_L in index or []:
+
+            column_L = [column_L] if isinstance(column_L, str) else list(column_L)
+
+            self.cursor.execute(
+                pgsql.SQL("CREATE INDEX IF NOT EXISTS {} ON {}.{} ({});").format(
+                    pgsql.Identifier('%s_%s_idx' % (table, '_'.join(column_L))),
+                    pgsql.Identifier(schema), pgsql.Identifier(table),
+                    pgsql.SQL(', ').join(pgsql.Identifier(c) for c in column_L)
+                )
+            )
+
+        if comment is not None:
+
+            comment_D = comment if isinstance(comment, dict) else vars(comment)
+
+            if comment_D.get('table'):
+
+                self.cursor.execute(
+                    pgsql.SQL("COMMENT ON TABLE {}.{} IS %s;").format(pgsql.Identifier(schema), pgsql.Identifier(table)),
+                    (comment_D['table'],)
+                )
+
+            columns = comment_D.get('columns') or {}
+
+            for column, text in (columns if isinstance(columns, dict) else vars(columns)).items():
+
+                self.cursor.execute(
+                    pgsql.SQL("COMMENT ON COLUMN {}.{}.{} IS %s;").format(
+                        pgsql.Identifier(schema), pgsql.Identifier(table), pgsql.Identifier(column)),
+                    (text,)
+                )
+
+        if index or comment is not None:
+
+            self.conn.commit()
 
     def _Execute_sql(self, sql):
         """
@@ -726,6 +799,8 @@ class PG_session:
 
         TEXT_TYPES = {'text', 'character varying', 'character'}
 
+        JSON_TYPES = {'json', 'jsonb'}
+
         text_unique_cols = {col for col in unique_cols if col_types.get(col) in TEXT_TYPES}
 
         for values in valueL:
@@ -811,6 +886,12 @@ class PG_session:
             insert_values = [
                 v.lower() if (isinstance(v, str) and columns[i].lower().strip() in text_unique_cols) else v
                 for i, v in enumerate(values)
+            ]
+
+            # JSON objects/arrays given for json/jsonb columns (e.g. ml_setting.parameter_set.content)
+            insert_values = [
+                Json(_Unstruct(v)) if (isinstance(v, (Struct, dict, list)) and col_types.get(columns[i].lower().strip()) in JSON_TYPES) else v
+                for i, v in enumerate(insert_values)
             ]
 
             if self.verbose > 1:
@@ -1475,7 +1556,6 @@ def Setup_schemas_tables(scheme_params_D, pilot_L):
 
     # To delete the complete database, open a session with the database source and delete
 
-    print (user_parameter)
 
     if user_parameter['process'][0]['process_id'] == 'delete_database' and user_parameter['process'][0]['delete']:
 
