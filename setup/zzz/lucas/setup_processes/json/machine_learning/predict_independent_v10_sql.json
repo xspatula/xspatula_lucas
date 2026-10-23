@@ -35,6 +35,13 @@
               "required": false,
               "default_value": "",
               "hint": "Comma separated list of saved models (.joblib), paths relative to the project root. Each model needs its .manifest.json."
+            },
+            {
+              "parameter": "dst_fp",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Folder for the predictions (<dataframe>_pred.parquet + .json), relative to the project root. Empty = <project_root_fp>/predictions."
             }
           ]
         }

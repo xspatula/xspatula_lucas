@@ -1,0 +1,19 @@
+{
+  "process": [
+    {
+      "process": "predict_independent",
+      "overwrite": true,
+      "parameters": {
+        "project_root_fp": "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm",
+        "dataframe": "lucas_2009_wetlab_foss-xds_10nm",
+        "model_array": [
+          "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm/models/lucas_2009_wetlab_foss-xds_10nm_ol_mc_tt/lucas_2009_wetlab_foss-xds_10nm_ol_mc_c-org_ols_tt.joblib",
+          "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm/models/lucas_2009_wetlab_foss-xds_10nm_ol_mc_tt/lucas_2009_wetlab_foss-xds_10nm_ol_mc_c-org_huber_tt.joblib",
+          "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm/models/lucas_2009_wetlab_foss-xds_10nm_ol_mc_tt/lucas_2009_wetlab_foss-xds_10nm_ol_mc_sand_ols_tt.joblib",
+          "./project_lucas_2009/data/compiled/lucas_2009_wetlab_foss-xds_10nm/models/lucas_2009_wetlab_foss-xds_10nm_ol_mc_tt/lucas_2009_wetlab_foss-xds_10nm_ol_mc_sand_huber_tt.joblib"
+        ],
+        "dst_fp": "./project_lucas_2009/data/predictions/lucas_2009_wetlab_foss-xds_10nm"
+      }
+    }
+  ]
+}

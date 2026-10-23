@@ -15,7 +15,8 @@ takes unprocessed spectra with the model's bands (any column order) and returns 
 of the indicator. Both are plain functions so that a server can use them without the process machinery.
 
 The predict_independent process predicts every sample of a parquet with one or more models and saves
-<stem>_pred.parquet (key columns + one column per model) with a companion JSON. If the parquet also holds
+<stem>_pred.parquet (key columns + one column per model) with a companion JSON in dst_fp (default
+<project_root_fp>/predictions, so the .previous_dataframe of the input folder is not changed). If the parquet also holds
 observed values of the indicator, the metrics are computed on the samples that were not used for training.
 '''
 
@@ -36,7 +37,7 @@ from src.ai4sh.previous_dataframe import Register_parquet
 from src.ai4sh.provenance import File_sha256
 from src.ai4sh.spectral_columns import Signal_type_of
 from src.ai4sh.machine_learning_preprocess import (_resolve_input_parquet, _resolve_single_previous,
-                                                   _is_spectral_col, _parse_array_param)
+                                                   _is_spectral_col, _parse_array_param, _load_companion_json)
 from src.ai4sh.machine_learning_model import Manifest_fp, _compute_metrics
 
 
@@ -139,6 +140,7 @@ class Process_predict(Get_schema_table):
         dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
         model_array     = _parse_array_param(getattr(p, 'model_array', []))
         overwrite       = bool(getattr(p, 'overwrite', False))
+        dst_param       = str(getattr(p, 'dst_fp', '') or '').strip()
 
         if not model_array:
             print('    ERROR: model_array is empty.')
@@ -155,11 +157,21 @@ class Process_predict(Get_schema_table):
                 print('    ERROR: %s' % e)
                 return
 
+        dst_fp = self._Path(dst_param) if dst_param else os.path.join(project_root_fp, 'predictions')
+        os.makedirs(dst_fp, exist_ok=True)
         stem   = os.path.splitext(os.path.basename(parquet_fp))[0]
-        out_fp = os.path.join(project_root_fp, stem + '_pred.parquet')
+        out_fp = os.path.join(dst_fp, stem + '_pred.parquet')
 
         if os.path.exists(out_fp) and not overwrite:
             print('    %s already exists. Use overwrite=True to rerun.' % os.path.basename(out_fp))
+            return
+
+        # The models refit their own preprocessing — preprocessed spectra (same band names!) would give wrong values
+        changed = [st.get('process') for st in (_load_companion_json(os.path.dirname(parquet_fp), stem) or {})
+                   .get('preprocessing_chain', []) if st.get('process') != 'detect_outliers']
+        if changed:
+            print('    ERROR: %s holds preprocessed spectra (%s); give the unprocessed spectra, the models '
+                  'apply their own preprocessing.' % (os.path.basename(parquet_fp), ', '.join(changed)))
             return
 
         df, units_D = Read_parquet_with_units(parquet_fp)
@@ -224,8 +236,8 @@ class Process_predict(Get_schema_table):
 
         Save_parquet_with_units(out_df, out_fp, out_units)
 
-        with open(os.path.join(project_root_fp, stem + '_pred.json'), 'w') as fh:
-            json.dump({'source_parquet': os.path.basename(parquet_fp), 'source_sha256': File_sha256(parquet_fp),
+        with open(os.path.join(dst_fp, stem + '_pred.json'), 'w') as fh:
+            json.dump({'source_parquet': parquet_fp, 'source_sha256': File_sha256(parquet_fp),
                        'n_samples': len(out_df), 'models': models_L}, fh, indent=2, default=str)
 
         Register_parquet(out_fp, 'predict_independent', '%d model(s) applied to %d samples' % (len(models_L), len(out_df)))

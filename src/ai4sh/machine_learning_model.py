@@ -781,8 +781,8 @@ class Process_regression_model(Get_schema_table):
             self._print_summary(results_D, indicator_cols, list(regressors.keys()))
 
         out_json = {
-            'source_parquet':      os.path.basename(parquet_fp),
-            'model_input_parquet': os.path.basename(source_fp),
+            'input_parquet':       os.path.basename(parquet_fp),
+            'source_parquet':      os.path.basename(source_fp),
             'refit_preprocessing': bool(chain),
             'preprocessing_chain': companion.get('preprocessing_chain', []),
             'signal_type':         signal_type,
