@@ -111,7 +111,7 @@ setup/zzz/lucas/setup_db/json/audit/audit_triggers_ml_setting_v10_sql.json
 
 
 # =============================================================
-# Side development of orgnaisms and eDNA
+# Side development of organisms and eDNA
 # =============================================================
 lucas/import_data/eDNA/
 setup/zzz/lucas/setup_db/json/organism/
