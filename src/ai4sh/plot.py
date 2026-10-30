@@ -23,8 +23,8 @@ from src.postgres.pg_ai4sh import PG_manage_AI4SH
 from src.lib.pilot import Get_project_path
 
 from src.ai4sh.chemometrics import (apply_transformations, apply_standardisation,
-                                    apply_chemometrics, apply_scatter_correction,
-                                    apply_scaling)
+                                    apply_scatter_correction, apply_scaling)
+from src.ai4sh.chemometric_chain import Parse_chain, Apply_chain
 
 from src.ai4sh.filter import apply_filter, apply_multi_filter, _load_filter_config
 
@@ -107,13 +107,16 @@ class Process_plot(Get_schema_table):
 
             self._Plot_spectra()
 
-        elif self.process_S.process.process == 'plot_spectra_scattercorrection_scalers':
+        # Old names (renamed 2026-10-27) kept as aliases
+        elif self.process_S.process.process in ('plot_spectra_scatter_correction',
+                                                'plot_spectra_scattercorrection_scalers'):
 
-            self._Plot_spectra_scattercorrection_scalers()
+            self._Plot_spectra_scatter_correction()
 
-        elif self.process_S.process.process == 'plot_spectra_scaling_methods':
+        elif self.process_S.process.process in ('plot_spectra_variable_scaling',
+                                                'plot_spectra_scaling_methods'):
 
-            self._Plot_spectra_scaling_methods()
+            self._Plot_spectra_variable_scaling()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -253,7 +256,7 @@ class Process_plot(Get_schema_table):
         '''Render one spectral panel and optionally save/show it.
 
         chain_ann: accumulated preprocessing history shown upper-right (e.g. "snv→mc").
-        file_suffix: filename stem derived from chain_ann (e.g. "snv_mc").
+        file_suffix: filename stem derived from chain_ann (e.g. "snv.mc").
         '''
         x_vals, x_label = _spectra_x_axis(step_cols)
         y_label = 'Score' if step_cols and str(step_cols[0]).startswith('pc') else self.signal_label
@@ -769,9 +772,13 @@ class Process_plot(Get_schema_table):
         filter_param       = str(getattr(p, 'filter', 'none')).strip() or 'none'
         multi_filter_param = str(getattr(p, 'multi_filter', 'none')).strip() or 'none'
 
-        # Parse chemometrics parameters
-        chemometrics_param = str(getattr(p, 'chemometrics', 'default')).strip() or 'default'
-        chemometrics_array = self._Parse_chemometrics_array(getattr(p, 'chemometrics_array', []))
+        # Parse the chemometric chain (same syntax as chemometric_chain, see src/ai4sh/chemometric_chain.py)
+        try:
+            chem_steps = Parse_chain(getattr(p, 'chemometrics_array', []),
+                                     lambda s: Get_project_path(self.project_root_FP, s))
+        except ValueError as e:
+            print('    ERROR: %s' % e)
+            return
 
         # Build panels list: always start with raw
         panels   = [('raw', spec_df, wavelengths)]
@@ -792,10 +799,14 @@ class Process_plot(Get_schema_table):
                 panels.append((flabel, df_f, cols_f))
                 base_df, base_cols = df_f, cols_f
 
-        # Append chemometric steps (apply_chemometrics prepends 'raw'; skip it)
-        chem_steps = apply_chemometrics(base_df, base_cols, chemometrics_array,
-                                        chemometrics_param, self.verbose)
-        panels.extend(chem_steps[1:])
+        # Append chemometric steps (Apply_chain starts with the input; skip it)
+        try:
+            chem_results = Apply_chain(base_df, base_cols, chem_steps)
+        except ValueError as e:
+            print('    ERROR: %s' % e)
+            return
+        chain_suffix = {r['label']: r['suffix'] for r in chem_results[1:]}
+        panels.extend((r['label'], r['df'], r['cols']) for r in chem_results[1:])
 
         bw = params_D.get('output_bandwidth', '')
         ann = 'n=%d  shown=%d' % (n_total, n_plot)
@@ -804,11 +815,11 @@ class Process_plot(Get_schema_table):
 
         chain_abbrevs = []
         for step_label, df_step, step_cols in panels:
-            abbrev = _step_to_abbrev(step_label)
+            abbrev = chain_suffix.get(step_label) or _step_to_abbrev(step_label)
             if step_label != 'raw':
                 chain_abbrevs.append(abbrev)
             chain_ann = '→'.join(chain_abbrevs) if chain_abbrevs else 'raw'
-            file_suffix = '_'.join(chain_abbrevs) if chain_abbrevs else 'raw'
+            file_suffix = '.'.join(chain_abbrevs) if chain_abbrevs else 'raw'
             self._Plot_spectra_panel(df_step, step_cols, colors, step_label, ann,
                                      chain_ann, file_suffix, show, save, plot_dir)
 
@@ -904,8 +915,8 @@ class Process_plot(Get_schema_table):
 
         plt.close(fig)
 
-    def _Plot_spectra_scattercorrection_scalers(self):
-        '''Compare all scatter correction methods in a stacked multiplot.'''
+    def _Plot_spectra_scatter_correction(self):
+        '''Compare all scatter corrections (per spectrum: l1, l2, max, snv, msc) in a stacked multiplot.'''
         p = self.process_S.process.parameters
         spec_df, wavelengths, colors, ann, _, show, save, plot_dir = self._Load_spec_df(p)
         if spec_df is None:
@@ -926,11 +937,11 @@ class Process_plot(Get_schema_table):
         self._Plot_spectra_comparison(
             panels, colors, ann,
             title='Scatter correction comparison',
-            filename_stem='compare_scattercorrection',
+            filename_stem='compare_scatter_correction',
             show=show, save=save, plot_dir=plot_dir)
 
-    def _Plot_spectra_scaling_methods(self):
-        '''Compare all scaling methods in a stacked multiplot.'''
+    def _Plot_spectra_variable_scaling(self):
+        '''Compare all variable (band-wise) scaling methods in a stacked multiplot.'''
         p = self.process_S.process.parameters
         spec_df, wavelengths, colors, ann, _, show, save, plot_dir = self._Load_spec_df(p)
         if spec_df is None:
@@ -952,6 +963,6 @@ class Process_plot(Get_schema_table):
 
         self._Plot_spectra_comparison(
             panels, colors, ann,
-            title='Scaling method comparison',
-            filename_stem='compare_scaling',
+            title='Variable scaling comparison',
+            filename_stem='compare_variable_scaling',
             show=show, save=save, plot_dir=plot_dir)

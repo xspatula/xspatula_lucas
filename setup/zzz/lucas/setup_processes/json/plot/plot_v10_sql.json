@@ -128,7 +128,7 @@
     },
     {
       "process": "add_process",
-      "overwrite": false,
+      "overwrite": true,
       "parameters": {
         "root_process": "plot",
         "process": "plot_spectra",
@@ -163,18 +163,11 @@
               "hint": "The filter to apply"
             },
             {
-              "parameter": "chemometrics",
-              "parameter_type": "text",
-              "required": false,
-              "default_value": "default",
-              "hint": "Chemometric methods applied before plotting, default applies a predefined methods set for each type of chemometric method (derivatives, scattercorrection,  scaling and decomposition)."
-            },
-            {
               "parameter": "chemometrics_array",
               "parameter_type": "array",
               "required": false,
               "default_value": "",
-              "hint": "Array of chemometric methods to actually apply, leave empty for none; if multiple methods are selected, the methods will be applied in the listed order."
+              "hint": "Steps applied in the listed order. Each item is a method name with default settings: moving-average, gauss, savitzky-golay, lowess (filters), l1, l2, max, snv, msc (scatter correction), derivative (1st), meancentring, autoscaling, paretoscaling, poissonscaling (variable scaling), pca (5 components); or an object with custom settings: {\"filter\": <set name, JSON path or settings>}, {\"multi_filter\": ...}, {\"scatter_correction\": [\"snv\",\"snv\"]}, {\"derivative\": 2}, {\"scaling\": \"autoscaling\"}, {\"variance_threshold\": {\"threshold\": 0.03, \"scaler\": \"minmax\"}}, {\"ward_clustering\": {\"n_clusters\": 40, \"connectivity\": true}} (n_clusters required), {\"pca\": 5}."
             },
             {
               "parameter": "colormap",
@@ -213,10 +206,10 @@
       "overwrite": false,
       "parameters": {
         "root_process": "plot",
-        "process": "plot_spectra_scattercorrection_scalers",
+        "process": "plot_spectra_scatter_correction",
         "min_user_stratum": 1,
         "title": "Plot scatter corrections",
-        "label": "Plot a comparison of scatter correction scaler results."
+        "label": "Plot a comparison of the scatter corrections (per spectrum): l1, l2, max, snv and msc."
       },
       "nodes": [
         {
@@ -267,10 +260,10 @@
       "overwrite": false,
       "parameters": {
         "root_process": "plot",
-        "process": "plot_spectra_scaling_methods",
+        "process": "plot_spectra_variable_scaling",
         "min_user_stratum": 1,
-        "title": "Plot scatter corrections",
-        "label": "Plot a comparison of scatter correction scaler results."
+        "title": "Plot variable scaling methods",
+        "label": "Plot a comparison of the variable (band-wise) scaling methods: meancentring, autoscaling, paretoscaling and poissonscaling."
       },
       "nodes": [
         {
@@ -283,13 +276,6 @@
               "required": false,
               "default_value": "",
               "hint": "The root fp of the project"
-            },
-            {
-              "parameter": "filter",
-              "parameter_type": "text",
-              "required": false,
-              "default_value": "none",
-              "hint": "Set path to the JSON file defining the filter. Available filter options: moving-average, gauss, savitszky-golay. To run the default settings of any of these filter set the parameter to the filter name"
             },
             {
               "parameter": "colormap",
