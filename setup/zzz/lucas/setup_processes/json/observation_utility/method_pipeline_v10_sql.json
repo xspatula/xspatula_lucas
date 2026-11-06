@@ -1,0 +1,119 @@
+{
+  "process": [
+    {
+      "process": "add_process",
+      "overwrite": false,
+      "parameters": {
+        "root_process": "manage_table_data",
+        "process": "manage_method_pipeline",
+        "min_user_stratum": 3,
+        "title": "Manage method pipeline",
+        "label": "Insert, update or delete a multi-step analysis method (e.g. eDNA metabarcoding), linked to its analysis method"
+      },
+      "nodes": [
+        {
+          "parent": "process",
+          "element": "parameters",
+          "parameter": [
+            {
+              "parameter": "name",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Unique name of the pipeline, e.g. ai4sh-16s",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "version",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "unspecified",
+              "hint": "Version of the pipeline",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "analysis_method_id__analysis_method_name",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Analysis method (observation_utility.analysis_method) the pipeline implements",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "url",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Url describing the pipeline",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "doi",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "DOI of the pipeline publication",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "abstract",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Abstract describing the pipeline",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

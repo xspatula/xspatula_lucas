@@ -290,6 +290,10 @@ class PG_session:
 
                 return
 
+        if self.delete:   # nothing (left) to delete: a delete block never creates
+
+            return
+
         if self.verbose > 2:
 
             print ('            CREATE SCHEMA', schema)
@@ -372,7 +376,11 @@ class PG_session:
 
                 return
 
-        elif self.verbose:
+        if self.delete:   # nothing (left) to delete: a delete block never creates
+
+            return
+
+        if self.verbose:
 
             print ('.   Creating schema.table: %s.%s' %(schema, table))
 
@@ -529,7 +537,11 @@ class PG_session:
 
                 return
 
-        elif self.verbose:
+        if self.delete:   # nothing (left) to delete: a delete block never creates
+
+            return
+
+        if self.verbose:
 
             print ('.   Creating trigger %s on %s.%s' % (trigger, schema, table))
 
@@ -550,7 +562,7 @@ class PG_session:
 
         self.conn.commit()
 
-    def _Get_table_keys(self,table):
+    def _Get_table_keys(self,table,schema=None):
         """
         @brief Retrieves the primary key columns and their data types for a specified table.
 
@@ -558,6 +570,7 @@ class PG_session:
         of columns that are part of the primary key for the given table.
 
         @param table Name of the table for which primary key columns are to be retrieved.
+        @param schema Optional schema; without it a table of the same name in another schema is included too.
 
         @details
         - Constructs and executes a SQL query joining table constraints, constraint column usage,
@@ -577,14 +590,15 @@ class PG_session:
                 ON c.table_schema = tc.constraint_schema
                 AND tc.table_name = c.table_name
                 AND ccu.column_name = c.column_name
-            WHERE constraint_type = 'PRIMARY KEY' AND tc.table_name = %s;
+            WHERE constraint_type = 'PRIMARY KEY' AND tc.table_name = %s
+              AND (%s::text IS NULL OR tc.table_schema = %s);
         """
 
-        self.cursor.execute(sql, (table,))
+        self.cursor.execute(sql, (table, schema, schema))
 
         return self.cursor.fetchall()
     
-    def _Get_table_uniques(self,table):
+    def _Get_table_uniques(self,table,schema=None):
         """
         @brief Retrieves the unique constraint columns for a specified table.
 
@@ -592,6 +606,7 @@ class PG_session:
         unique constraints for the given table.
 
         @param table Name of the table for which unique constraint columns are to be retrieved.
+        @param schema Optional schema; without it a table of the same name in another schema is included too.
 
         @details
         - Constructs and executes a SQL query joining table constraints and key column usage to identify
@@ -606,11 +621,13 @@ class PG_session:
             SELECT kcu.column_name
             FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu
-                ON tc.constraint_name = kcu.constraint_name
-            WHERE tc.constraint_type = 'UNIQUE' AND tc.table_name = %s;
+                ON tc.constraint_schema = kcu.constraint_schema
+                AND tc.constraint_name = kcu.constraint_name
+            WHERE tc.constraint_type = 'UNIQUE' AND tc.table_name = %s
+              AND (%s::text IS NULL OR tc.table_schema = %s);
         """
 
-        self.cursor.execute(sql, (table,))
+        self.cursor.execute(sql, (table, schema, schema))
 
         return self.cursor.fetchall()
 
@@ -783,14 +800,14 @@ class PG_session:
 
         #table_keys = self._Get_table_keys(table)
 
-        table_uniques = self._Get_table_uniques(table)
+        table_uniques = self._Get_table_uniques(table, schema)
 
         #key_cols = [str(item[0].lower()) for item in table_keys]
         unique_cols = [str(item[0].lower()) for item in table_uniques]
 
         if not unique_cols:
 
-            table_keys = self._Get_table_keys(table)
+            table_keys = self._Get_table_keys(table, schema)
 
             unique_cols = [str(item[0].lower()) for item in table_keys]
 
@@ -875,6 +892,11 @@ class PG_session:
                         print ('            Record already exists\n')
 
                     continue
+
+            # A delete block only deletes: a record that is not there (e.g. deleted by an earlier run) is not inserted
+            if self.delete:
+
+                continue
 
             if len(columns) != len(values):
 

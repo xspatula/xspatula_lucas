@@ -46,6 +46,20 @@
               "hint": "Comma separated list of the indicators to evaluate."
             },
             {
+              "parameter": "covariate_array",
+              "parameter_type": "array",
+              "required": false,
+              "default_value": "",
+              "hint": "Covariates used next to the spectra: empty = spectra only, all = every covariate of the (compiled) dataset, or the covariate names. Numeric covariates are used as they are, nominal (class) covariates are one-hot encoded. Samples missing a covariate are skipped, also when predicting."
+            },
+            {
+              "parameter": "class_grouping",
+              "parameter_type": "array",
+              "required": false,
+              "default_value": "",
+              "hint": "Pool the classes of nominal covariates into groups before encoding: [{\"covariate\": \"soil texture usda\", \"groups\": [[\"sand\", \"loamy sand\"], [\"loam\", \"silt loam\"], ...]}]. Every class in the data must be placed in a group. Predefined groupings are separate covariates, e.g. soil texture usda major group."
+            },
+            {
               "parameter": "regressor_array",
               "parameter_type": "array",
               "required": false,
@@ -177,6 +191,27 @@
               "required": false,
               "default_value": false,
               "hint": "Save feature importance plot to file or not."
+            },
+            {
+              "parameter": "plot_layout",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "default",
+              "hint": "How the shown plots are arranged: default (picked from what is shown, the modes and the number of indicators/regressors), a preset (scatter-1, scatter-2, scatter-3, scatter-4, scatter-tt-kf, importance), a custom plot_layout parameter set, a JSON file (relative or absolute path), or none (one figure per plot, as before). Saved plots are always single figures."
+            },
+            {
+              "parameter": "save_plot_layout",
+              "parameter_type": "boolean",
+              "required": false,
+              "default_value": false,
+              "hint": "Also save the grid figures of plot_layout, under plot/<dataframe>_grid/."
+            },
+            {
+              "parameter": "importance_only",
+              "parameter_type": "boolean",
+              "required": false,
+              "default_value": false,
+              "hint": "Only map the feature and permutation importance: the regressors are fitted (train/test: on the training samples, permutation on the test samples; kfold: on all samples), but no scatter, metrics, k-fold predictions or models are made or saved."
             }
           ]
         }

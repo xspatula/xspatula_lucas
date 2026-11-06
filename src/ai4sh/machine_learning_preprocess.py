@@ -18,12 +18,12 @@ from sklearn.ensemble import IsolationForest
 from sklearn.covariance import EllipticEnvelope
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.feature_selection import VarianceThreshold, SelectKBest, f_regression
 from sklearn.model_selection import KFold
 
 from src.ai4sh.chemometrics import (apply_derivative, apply_scatter_correction,
-                                     apply_scaling, apply_decomposition)
+                                     apply_scaling, apply_decomposition, SCATTER_CORRECTIONS, Scatter_abbrev)
 from src.ai4sh.chemometric_chain import (Parse_chain, Apply_chain, Chain_from_companion, Check_spectral_range,
                                          Num_tag as _num_tag,
                                          Filter_suffix as _filter_suffix)
@@ -86,7 +86,6 @@ def _parse_array_param(raw):
 
 
 # Options offered by scaler/method "select": per-spectrum scatter corrections and band-wise variable scalings
-SCATTER_CORRECTIONS = ['l1', 'l2', 'max', 'snv', 'msc']
 VARIABLE_SCALINGS   = ['meancentring', 'autoscaling', 'paretoscaling', 'poissonscaling']
 # Filter parameter sets compared by filter_fp "select" when no filter_array is given; key → file abbreviation
 FILTER_PRESETS = ['moving-average', 'gauss', 'savitzky-golay', 'lowess']
@@ -153,6 +152,21 @@ def _normalize_params_to_companion(d):
     return out
 
 
+def _Default_indicators(parquet_fp, numeric_cols, verbose=0, named=()):
+    '''Columns an indicator step processes when indicator_array is empty: the numeric non-spectral columns minus the
+    covariates of the dataset (column_blocks of a compiled dataset, else covariate_array of a selection with role all;
+    inherited by derived files). A covariate named in indicator_array, or in named (e.g. the data_range of
+    indicator_range), is processed.'''
+    companion = _load_companion_json(os.path.dirname(parquet_fp),
+                                     os.path.splitext(os.path.basename(parquet_fp))[0]) or {}
+    covariates = set((companion.get('column_blocks') or {}).get('covariate') or companion.get('covariate_array')
+                     or []) - set(named)
+    skipped = [c for c in numeric_cols if c in covariates]
+    if skipped and verbose >= 1:
+        print('    Covariates not processed (name them in indicator_array to include): %s' % ', '.join(skipped))
+    return [c for c in numeric_cols if c not in covariates]
+
+
 def _load_companion_json(project_root_fp, stem):
     '''Load the companion {stem}.json of a parquet stem, or None if there is none.'''
     fp = os.path.join(project_root_fp, stem + '.json')
@@ -217,7 +231,7 @@ def _step_abbrev_from_info(process_name, parameters):
         n = parameters.get('derivative', 1)
         return 'd%dapp' % n if parameters.get('append', False) else 'd%d' % n
     if process_name == 'spectra_scatter_correction':
-        return ''.join(parameters.get('scaler', ['snv']))
+        return Scatter_abbrev(parameters.get('scaler', ['snv']))
     if process_name == 'spectra_scaling':
         return {'meancentring': 'mc', 'autoscaling': 'as',
                 'paretoscaling': 'ps', 'poissonscaling': 'poi'}.get(
@@ -228,6 +242,8 @@ def _step_abbrev_from_info(process_name, parameters):
         return 'vt'
     if process_name == 'detect_outliers':
         return _OUTLIER_SUFFIX.get(str(parameters.get('detector', '')).lower(), 'ol')
+    if process_name == 'indicator_range':
+        return 'ir'
     if process_name == 'filter_spectra':
         cfg = parameters.get('filter_cfg', {})
         if 'savitzky-golay' in cfg: return 'sg'
@@ -300,9 +316,24 @@ def _Ward_tune(X, n_clusters_list, kfolds, connectivity=False):
 
 
 def _Ward_pick_best(scores):
-    '''Smallest n_clusters whose mean MSE is within 5 % of the global minimum.'''
-    min_mse = min(v[0] for v in scores.values())
-    return min(nc for nc, (m, _) in sorted(scores.items()) if m <= min_mse * 1.05)
+    '''n_clusters at the elbow of the reconstruction MSE curve.
+
+    The MSE keeps falling as clusters are added, so a "near the minimum" rule always ends at the largest candidate.
+    The elbow is the candidate furthest below the straight line from the first to the last candidate, with both axes
+    scaled to 0-1: where adding clusters stops paying off. With fewer than 3 candidates the smallest MSE is used.
+    '''
+    ncs   = sorted(scores)
+    if len(ncs) < 3:
+        return min(ncs, key=lambda nc: scores[nc][0])
+    x     = np.array(ncs, dtype=float)
+    y     = np.array([scores[nc][0] for nc in ncs])
+    x     = (x - x[0]) / (x[-1] - x[0])
+    y_rng = y.max() - y.min()
+    if y_rng == 0:
+        return ncs[0]
+    y     = (y - y.min()) / y_rng
+    chord = y[0] + (y[-1] - y[0]) * x
+    return ncs[int(np.argmax(chord - y))]
 
 
 def _resolve_input_parquet(project_root_fp, dataframe_param):
@@ -455,7 +486,7 @@ def _chem_abbrev(step_name, label, append=False):
             n = 1
         return 'd%dapp' % n if append else 'd%d' % n
     if step_name == 'scatter_correction':
-        return label.replace('+', '')
+        return Scatter_abbrev(label)
     if step_name == 'scaling':
         return {'meancentring': 'mc', 'autoscaling': 'as',
                 'paretoscaling': 'ps', 'poissonscaling': 'poi'}.get(label, label[:4])
@@ -470,8 +501,49 @@ def _chem_abbrev(step_name, label, append=False):
     return ''.join(c for c in label.lower() if c.isalnum())[:6]
 
 
+def _Parse_data_range(raw):
+    '''data_range parameter → {indicator: (min, max)} (None = open end). Accepts a JSON string or a dict of
+    {indicator: {"min": .., "max": ..}} (as in select_indicator_only); empty → {}. Raises ValueError if invalid.'''
+    if hasattr(raw, '__dict__') and not isinstance(raw, type):
+        raw = {k: (vars(v) if hasattr(v, '__dict__') else v) for k, v in vars(raw).items()}
+    if isinstance(raw, str):
+        if not raw.strip() or raw.strip().lower() == 'none':
+            return {}
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError('data_range is not valid JSON: %s' % e)
+    ranges = {}
+    for col, r in (raw or {}).items():
+        if not isinstance(r, dict):
+            raise ValueError('data_range "%s": give {"min": .., "max": ..}' % col)
+        lo, hi = r.get('min'), r.get('max')
+        lo = None if lo in (None, '') else float(lo)
+        hi = None if hi in (None, '') else float(hi)
+        if lo is not None and hi is not None and lo >= hi:
+            raise ValueError('data_range "%s": min (%s) must be below max (%s)' % (col, lo, hi))
+        ranges[col] = (lo, hi)
+    return ranges
+
+
+def _Outside_range(vals, lo, hi):
+    '''Boolean array, True where a value is below lo or above hi (None = open end); NaN is never outside.'''
+    vals = np.asarray(vals, dtype=float)
+    out = np.zeros(len(vals), dtype=bool)
+    with np.errstate(invalid='ignore'):
+        if lo is not None:
+            out |= vals < lo
+        if hi is not None:
+            out |= vals > hi
+    return out
+
+
+def _Range_text(lo, hi):
+    return '[%s, %s]' % ('-' if lo is None else '%g' % lo, '-' if hi is None else '%g' % hi)
+
+
 class Process_ml_preprocess(Get_schema_table):
-    '''Machine-learning preprocessing: outlier detection per indicator.'''
+    '''Machine-learning preprocessing: indicator outliers and range, spectral preprocessing and band selection.'''
 
     def __init__(self, process_S, pg_session_C, project_root_FP):
         self.verbose = process_S.process.verbose
@@ -486,6 +558,8 @@ class Process_ml_preprocess(Get_schema_table):
     def _Sub_process(self, _json_file_key):
         if self.process_S.process.process == 'detect_outliers':
             self._Detect_outliers()
+        elif self.process_S.process.process == 'indicator_range':
+            self._Indicator_range()
         elif self.process_S.process.process == 'select_variance_threshold':
             self._Variance_threshold()
         elif self.process_S.process.process == 'delete_dataframes':
@@ -669,7 +743,7 @@ class Process_ml_preprocess(Get_schema_table):
                     print('    WARNING: indicator "%s" not found in parquet, skipping.' % col)
             indicator_cols = [c for c in requested if c in all_indicators]
         else:
-            indicator_cols = all_indicators
+            indicator_cols = _Default_indicators(parquet_fp, all_indicators, self.verbose)
 
         if not indicator_cols:
             print('    ERROR: no valid indicator columns to process.')
@@ -819,6 +893,182 @@ class Process_ml_preprocess(Get_schema_table):
             ol_del_fp,
         ))
 
+    # ------------------------------------------------------------------ indicator range
+
+    def _Plot_indicator_range(self, df, indicator_cols, ranges, show, save, plot_dir):
+        '''Strip plot per indicator: values inside (blue) and outside (red) the range, limits as dashed lines.'''
+        plt.close('all')
+        n = len(indicator_cols)
+        fig, axes = plt.subplots(nrows=n, ncols=1, figsize=(9, 2.5 * n))
+        if n == 1:
+            axes = [axes]
+
+        for ax, col in zip(axes, indicator_cols):
+            vals = df[col].values.astype(float)
+            vals = vals[~np.isnan(vals)]
+            lo, hi = ranges[col]
+            outside = _Outside_range(vals, lo, hi)
+            plot_df = pd.DataFrame({'value': vals, 'status': np.where(outside, 'outside', 'inside'), '_': ''})
+            sns.stripplot(data=plot_df, x='value', y='_', hue='status',
+                          palette={'inside': 'steelblue', 'outside': 'red'}, hue_order=['inside', 'outside'],
+                          alpha=0.55, jitter=True, size=4, orient='h', ax=ax)
+            for limit in (lo, hi):
+                if limit is not None:
+                    ax.axvline(limit, color='red', linestyle='--', linewidth=0.9)
+            ax.set_ylabel('')
+            ax.set_xlabel(col)
+            ax.set_title('%s  (%d of %d outside %s)' % (col, int(outside.sum()), len(vals), _Range_text(lo, hi)))
+            ax.legend(loc='upper right', fontsize=7, framealpha=0.6)
+
+        plt.tight_layout()
+
+        if save and plot_dir:
+            out_fp = os.path.join(plot_dir, 'range_%s.png' % '_'.join(c.replace(' ', '_') for c in indicator_cols))
+            fig.savefig(out_fp, dpi=150, bbox_inches='tight')
+            if self.verbose >= 1:
+                print('    Plot saved: %s' % out_fp)
+
+        if show:
+            plt.show()
+        else:
+            plt.close(fig)
+
+    def _Print_indicator_range(self, df, indicator_cols, ranges):
+        '''Table per indicator: distribution (min, 1 %, median, 99 %, max), range and number of values outside.'''
+        print('\n    %-14s %6s %9s %9s %9s %9s %9s   %-18s %s' % (
+            'indicator', 'n', 'min', 'p1', 'median', 'p99', 'max', 'range', 'outside'))
+        for col in indicator_cols:
+            vals = df[col].values.astype(float)
+            vals = vals[~np.isnan(vals)]
+            lo, hi = ranges[col]
+            if not len(vals):
+                print('    %-14s %6d' % (col, 0))
+                continue
+            q = np.percentile(vals, [0, 1, 50, 99, 100])
+            print('    %-14s %6d %9.3g %9.3g %9.3g %9.3g %9.3g   %-18s %d' % (
+                col, len(vals), q[0], q[1], q[2], q[3], q[4], _Range_text(lo, hi),
+                int(_Outside_range(vals, lo, hi).sum())))
+
+    def _Indicator_range(self):
+        '''Set indicator values outside a [min, max] range to missing (NaN), per indicator.
+
+        data_range gives the start ranges, as in select_indicator_only: {"c-org": {"min": 0, "max": 10}}; an
+        indicator without an entry starts open. With interactive true the distributions and ranges are printed and
+        plotted, and a range is changed by typing "<indicator> <min> <max>" ("-" = open end) until Enter accepts.
+        Unlike outlier detection, nothing is learned from the samples: the limits are fixed, so the step is the same
+        for training and independent data. Output suffix .ir (+ optional #name_extension).
+        '''
+        p = self.process_S.process.parameters
+
+        project_root_fp = str(p.project_root_fp).strip()
+        if not os.path.isabs(project_root_fp):
+            project_root_fp = Get_project_path(self.project_root_FP, project_root_fp)
+        if not os.path.exists(project_root_fp):
+            print('    ERROR: project_root_fp not found: %s' % project_root_fp)
+            return
+
+        ext = _name_extension(p)
+        if ext is None:
+            return
+        interactive     = bool(getattr(p, 'interactive', True))
+        show            = getattr(p, 'show', True)
+        save            = getattr(p, 'save', False)
+        overwrite       = self._Overwrite(p)
+        dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
+
+        try:
+            data_range = _Parse_data_range(getattr(p, 'data_range', ''))
+        except ValueError as e:
+            print('    ERROR: %s' % e)
+            return
+
+        parquet_fp = _resolve_dataframe(project_root_fp, dataframe_param)
+        if parquet_fp is None:
+            return
+        df, units_D = Read_parquet_with_units(parquet_fp)
+        if self.verbose >= 1:
+            print('    Loaded %d rows from %s' % (len(df), os.path.basename(parquet_fp)))
+        stem = os.path.splitext(os.path.basename(parquet_fp))[0]
+
+        all_indicators = [c for c in df.columns if not _is_metadata_col(c) and not _is_spectral_col(c)
+                          and pd.api.types.is_numeric_dtype(df[c])]
+        requested = _parse_array_param(getattr(p, 'indicator_array', []))
+        for col in requested + [c for c in data_range if c not in requested]:
+            if col not in all_indicators:
+                print('    WARNING: indicator "%s" not found in parquet, skipping.' % col)
+        defaults = [] if requested else _Default_indicators(parquet_fp, all_indicators, self.verbose, data_range)
+        indicator_cols = [c for c in (requested or defaults) if c in all_indicators]
+        if not indicator_cols:
+            print('    ERROR: no valid indicator columns to process.')
+            return
+
+        ranges = {c: data_range.get(c, (None, None)) for c in indicator_cols}
+        plot_dir = self._Build_plot_output_path(project_root_fp) if save else None
+
+        while True:
+            self._Print_indicator_range(df, indicator_cols, ranges)
+            if show or save:
+                self._Plot_indicator_range(df, indicator_cols, ranges, show, save, plot_dir)
+            if not interactive:
+                break
+            raw = input('\n    Change a range: <indicator> <min> <max> ("-" = open end); '
+                        'Enter = accept, 0 = skip: ').strip()
+            if raw == '':
+                break
+            if raw == '0':
+                print('    Indicator range skipped.')
+                return
+            parts = raw.rsplit(maxsplit=2)
+            if len(parts) != 3 or parts[0] not in ranges:
+                print('    Give an indicator (%s), a min and a max, e.g. "%s 0 10".'
+                      % (', '.join(indicator_cols), indicator_cols[0]))
+                continue
+            try:
+                lo, hi = [None if v == '-' else float(v) for v in parts[1:]]
+            except ValueError:
+                print('    min and max must be numbers or "-".')
+                continue
+            if lo is not None and hi is not None and lo >= hi:
+                print('    min must be below max.')
+                continue
+            ranges[parts[0]] = (lo, hi)
+
+        masks = {c: _Outside_range(df[c].values.astype(float), *ranges[c]) for c in indicator_cols}
+        applied = {c: ranges[c] for c in indicator_cols if masks[c].any()}
+        if not applied:
+            print('    No indicator values outside the ranges — nothing saved.')
+            return
+
+        ir_fp = os.path.join(project_root_fp, Derived_stem(stem, 'ir' + ext) + '.parquet')
+        previous = [{'dataframe': os.path.basename(ir_fp), 'indicator': None, 'regressor': None, 'selector': None}]
+        if os.path.exists(ir_fp) and not overwrite:
+            print('    Output already exists. Use overwrite=True to save. Skipping save.')
+            _write_previous_df(project_root_fp, 'indicator_range', previous)
+            return
+
+        df_out = df.copy()
+        for col in applied:
+            df_out.loc[masks[col], col] = np.nan
+
+        Save_parquet_with_units(df_out, ir_fp, units_D)
+        _write_previous_df(project_root_fp, 'indicator_range', previous)
+
+        spectral_kept = [c for c in df.columns if _is_spectral_col(c)]
+        _write_companion_json(
+            project_root_fp, stem, os.path.splitext(os.path.basename(ir_fp))[0], spectral_kept,
+            {'_id': 'ir' + ext,
+             'process': 'indicator_range',
+             'parameters': {'data_range': {c: {'min': lo, 'max': hi} for c, (lo, hi) in applied.items()},
+                            'indicator_array': list(applied)}},
+            Signal_type_of(units_D, spectral_kept) if spectral_kept else None,
+            indicator_cols=all_indicators,
+        )
+
+        n_removed = sum(int(masks[c].sum()) for c in applied)
+        print('    Set %d value%s outside the range to missing across %d indicator%s (%s). Saved: %s' % (
+            n_removed, 's' if n_removed != 1 else '', len(applied), 's' if len(applied) != 1 else '',
+            ', '.join('%s %s' % (c, _Range_text(*r)) for c, r in applied.items()), ir_fp))
+
     # ------------------------------------------------------------------ variance threshold plot
 
     def _Plot_variance_threshold(self, df, spectral_cols, wavelengths, variances_scaled,
@@ -908,10 +1158,9 @@ class Process_ml_preprocess(Get_schema_table):
         ext = _name_extension(p)
         if ext is None:
             return
-        scaler_name = str(getattr(p, 'scaler', 'none')).strip().lower()
-        if scaler_name == 'none':
-            print('    Variance threshold skipped (scaler=none).')
-            return
+        # Band variances are always computed on minmax-scaled bands (0-1 per band): standard scaling gives every
+        # band variance 1 and robust scaling near-constant variances, so neither can separate bands
+        scaler_name = 'minmax'
 
         dataframe_param = str(getattr(p, 'dataframe', 'raw')).strip()
         show      = getattr(p, 'show', True)
@@ -941,12 +1190,7 @@ class Process_ml_preprocess(Get_schema_table):
         X = df[spectral_cols].values.astype(float)
 
         # Scale
-        scalers = {'minmax': MinMaxScaler(), 'standard': StandardScaler(), 'robust': RobustScaler()}
-        if scaler_name not in scalers:
-            print('    ERROR: unknown scaler "%s". Use minmax, standard, or robust.' % scaler_name)
-            return
-
-        X_scaled = scalers[scaler_name].fit_transform(X)
+        X_scaled = MinMaxScaler().fit_transform(X)
         variances_scaled = VarianceThreshold(threshold=0.0).fit(X_scaled).variances_
         var_min, var_med, var_max = (float(np.min(variances_scaled)),
                                      float(np.median(variances_scaled)),
@@ -1002,8 +1246,8 @@ class Process_ml_preprocess(Get_schema_table):
         support     = ~discard_mask
         retain_cols = [c for c, keep in zip(spectral_cols, support) if keep]
         step_info   = {'process': 'select_variance_threshold',
-                       'parameters': {'scaler': scaler_name, 'threshold': threshold}}
-        abbrev      = 'vt%s%s%s' % (scaler_name[0], _num_tag(threshold), ext)
+                       'parameters': {'threshold': threshold}}
+        abbrev      = 'vt%s%s' % (_num_tag(threshold), ext)
         step_info['_id'] = abbrev
         out_fp, skipped = self._Accept_and_save(df, df[retain_cols], retain_cols, abbrev,
                                           stem, project_root_fp, overwrite, step_info, units_D,
@@ -1193,13 +1437,13 @@ class Process_ml_preprocess(Get_schema_table):
 
     def _Load_named_settings(self, family, param, default_fpn=None):
         '''Settings of a parameter set name (ml_setting), "default" or a JSON path relative to the project root;
-        {} for none or a missing file (warning).'''
+        {} for none, None for a missing file or an unknown name (error printed: the caller stops).'''
         try:
             return Load_settings(family, param, default_fpn, resolve_path=self._Resolve_filter_fp,
                                  verbose=self.verbose) or {}
         except (FileNotFoundError, ValueError) as e:
             print('    ERROR: %s' % e)
-            return {}
+            return None
 
     def _Filter_spectra(self):
         '''Single smoothing filter; filter_fp "select" compares the filters in filter_array and asks.
@@ -1358,7 +1602,7 @@ class Process_ml_preprocess(Get_schema_table):
                         [m + s for m, s in zip(means, stds)],
                         alpha=0.2, color='steelblue')
         ax.axvline(best_nc, color='red', linestyle='--', linewidth=1,
-                   label='best n_clusters = %d' % best_nc)
+                   label='elbow n_clusters = %d' % best_nc)
         ax.set_xlabel('n_clusters')
         ax.set_ylabel('Reconstruction MSE')
         ax.set_title('Ward clustering — reconstruction error vs n_clusters')
@@ -1445,7 +1689,7 @@ class Process_ml_preprocess(Get_schema_table):
                   % (len(clusters_list), connectivity))
             scores  = _Ward_tune(X, clusters_list, kfolds, connectivity)
             n_tuned = _Ward_pick_best(scores)
-            print('    Tuned: best n_clusters = %d' % n_tuned)
+            print('    Tuned: n_clusters at the elbow of the MSE curve = %d' % n_tuned)
             self._Plot_ward_tune(scores, n_tuned, show, save, plot_dir)
             n_suggest = n_tuned
         else:
@@ -1678,7 +1922,7 @@ class Process_ml_preprocess(Get_schema_table):
                     print('    WARNING: indicator "%s" not found or not numeric, skipping.' % col)
             indicator_cols = [c for c in indicator_array if c in all_indicators]
         else:
-            indicator_cols = all_indicators
+            indicator_cols = _Default_indicators(parquet_fp, all_indicators, self.verbose)
 
         if not indicator_cols:
             print('    ERROR: no valid indicator columns found.')
@@ -1861,6 +2105,8 @@ class Process_ml_preprocess(Get_schema_table):
         model_params = self._Load_named_settings('regressor', model_params_param or 'default', _DEFAULT_MODEL_PARAMS_FP)
         sel_defaults = self._Load_named_settings('selector', 'default',
                                                  Default_fpn('selector', 'selector_default_settings.json'))
+        if model_params is None or sel_defaults is None:
+            return
         # keys of the settings file: permutation / tree_based (older code read permutation_selector / tree_based_selector)
         perm_cfg     = sel_defaults.get('permutation', sel_defaults.get('permutation_selector', {}))
         tree_cfg     = sel_defaults.get('tree_based', sel_defaults.get('tree_based_selector', {}))
@@ -2318,13 +2564,18 @@ class Process_ml_preprocess(Get_schema_table):
         return results[n - 1]
 
     def _Spectra_scatter_correction(self):
-        '''Scatter correction per spectrum (l1, l2, max, snv, msc); scaler "select" compares all and asks.'''
+        '''Scatter correction per spectrum (l1, l2, max, snv, msc, detrend); scaler "select" compares all and asks.'''
         p   = self.process_S.process.parameters
         inp = self._Load_spec_inputs(p)
         if inp is None:
             return
 
         scalers = _parse_array_param(getattr(p, 'scaler', ['snv']))
+        unknown = [sc for sc in scalers if sc not in SCATTER_CORRECTIONS] if scalers != ['select'] else []
+        if unknown:
+            print('    ERROR: unknown scatter correction %s (%s or select).'
+                  % (', '.join('"%s"' % sc for sc in unknown), ', '.join(SCATTER_CORRECTIONS)))
+            return
         apply_fn = lambda sc: apply_scatter_correction(inp['spec_df'], inp['wavelengths'],
                                                        {'scaler': sc if isinstance(sc, list) else [sc]})
         confirm = True
@@ -2340,7 +2591,7 @@ class Process_ml_preprocess(Get_schema_table):
 
         sub_in,  colors, n_shown = self._Sub_spec(inp['spec_df'], inp['max_spectra'], inp['colormap'])
         sub_out, _,      _       = self._Sub_spec(spec_out,       inp['max_spectra'], inp['colormap'])
-        abbrev    = label.replace('+', '')
+        abbrev    = Scatter_abbrev(label)
         ann_shown = '%s  shown=%d' % (inp['ann'], n_shown)
 
         self._Plot_input_output(
@@ -2365,6 +2616,9 @@ class Process_ml_preprocess(Get_schema_table):
             return
 
         method   = str(getattr(p, 'method', 'meancentring')).strip()
+        if method not in VARIABLE_SCALINGS + ['select']:
+            print('    ERROR: unknown scaling method "%s" (%s or select).' % (method, ', '.join(VARIABLE_SCALINGS)))
+            return
         apply_fn = lambda m: apply_scaling(inp['spec_df'], inp['wavelengths'], {'method': m})
         confirm  = True
         if method == 'select':

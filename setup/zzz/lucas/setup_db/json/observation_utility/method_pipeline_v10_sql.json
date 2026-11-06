@@ -1,0 +1,57 @@
+{
+  "process": [
+    {
+      "process_id": "create_table",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "observation_utility",
+        "table": "method_pipeline",
+        "command": [
+          "id SERIAL",
+          "name TEXT UNIQUE",
+          "version TEXT NOT NULL DEFAULT 'unspecified'",
+          "analysis_method_id INTEGER NOT NULL REFERENCES observation_utility.analysis_method (id)",
+          "url TEXT",
+          "doi TEXT",
+          "abstract TEXT",
+          "PRIMARY KEY (id)"
+        ]
+      },
+      "audit": {
+        "INSERT": true,
+        "UPDATE": true,
+        "DELETE": true
+      }
+    },
+    {
+      "process_id": "create_table",
+      "overwrite": false,
+      "delete": false,
+      "parameters": {
+        "schema": "observation_utility",
+        "table": "method_pipeline_step",
+        "command": [
+          "id SERIAL",
+          "method_pipeline_id INTEGER NOT NULL REFERENCES observation_utility.method_pipeline (id)",
+          "step SMALLINT NOT NULL",
+          "stage TEXT NOT NULL CHECK (stage IN ('laboratory','bioinformatics'))",
+          "name TEXT NOT NULL",
+          "lab_protocol_id INTEGER REFERENCES observation_utility.lab_protocol (id)",
+          "edna_primer_pair_id INTEGER REFERENCES observation_utility.edna_primer_pair (id)",
+          "software_id INTEGER REFERENCES observation_utility.software (id)",
+          "taxonomy_reference_id INTEGER REFERENCES organism_utility.taxonomy_reference (id)",
+          "parameters JSONB NOT NULL DEFAULT '{}'::JSONB",
+          "abstract TEXT",
+          "UNIQUE (method_pipeline_id, step)",
+          "PRIMARY KEY (id)"
+        ]
+      },
+      "audit": {
+        "INSERT": true,
+        "UPDATE": true,
+        "DELETE": true
+      }
+    }
+  ]
+}

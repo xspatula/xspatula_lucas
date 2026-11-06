@@ -17,9 +17,23 @@ index (wl_nm_550 → 550, d555 → 555, pc1 → 1), the same convention as the e
 Holdout_test_mask() defines the test samples from a hash of the sample id. It does not depend on row order or on
 which rows are missing for an indicator, so the supervised band selection steps and the model use the same test
 samples as long as they read the same set of samples.
+
+Covariates (other than spectra) enter a model through CovariateBlocks: the spectral columns pass through the
+refitted chain, numeric covariates are kept as they are and nominal covariates (classes, e.g. soil texture) are
+one-hot encoded, optionally after pooling classes into groups (class_grouping). Numeric covariates are standardised
+with the mean and standard deviation of the training samples, so a model does not depend on their unit (% or g/kg)
+and a high-variance covariate does not dominate a plsr component or a knn/svr/mlp distance. Covariate columns are named
+cv:<label> and cv:<label>=<class>; Column_index leaves these names as they are.
+
+CappedPLSRegression is the plsr regressor: n_components is capped at fit to what the training samples and the bands
+left after the chain allow, the rank of the centred X (at most n_samples - 1), instead of failing. It prints nothing
+(k-fold and RFE fit it many times); Pls_cap_text() gives the note that regression modeling prints per indicator and
+mode.
 '''
 
 # Standard library imports
+import re
+import json
 import hashlib
 
 import numpy as np
@@ -28,14 +42,15 @@ import pandas as pd
 from scipy.stats import boxcox
 from scipy.special import inv_boxcox
 
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.cluster import FeatureAgglomeration
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_regression
 from sklearn.preprocessing import (MinMaxScaler, StandardScaler, RobustScaler,
                                    PowerTransformer, QuantileTransformer)
 
-from src.ai4sh.chemometrics import apply_derivative, _snv, _msc, Scaling_parameters
+from src.ai4sh.chemometrics import apply_derivative, _snv, _msc, _detrend, Scaling_parameters
 from src.ai4sh.filter import apply_filter, apply_multi_filter
 from src.ai4sh.spectral_columns import Is_band_col, Band_value
 
@@ -43,16 +58,23 @@ HOLDOUT_SEED = 42
 
 HOLDOUT_KEYS = ('sample_id', 'sample_name')
 
+# Prefix of the covariate columns that CovariateBlocks adds to the spectral features
+COVARIATE_PREFIX = 'cv:'
+
 
 # ------------------------------------------------------------------ columns and holdout
 
 def Column_index(col):
-    '''Numeric index of a spectral column: wl_nm_550 → 550, d555 → 555, pc1 → 1, wc3 → 3, 550 → 550.'''
+    '''Numeric index of a spectral column: wl_nm_550 → 550, d555 → 555, pc1 → 1, wc3 → 3, 550 → 550.
+    Covariate columns (cv:<label>, cv:<label>=<class>) are returned as they are.'''
 
     if isinstance(col, (int, float, np.integer, np.floating)):
         return col
 
     s = str(col)
+
+    if s.startswith(COVARIATE_PREFIX):
+        return s
 
     if Is_band_col(s):
         return Band_value(s)
@@ -183,7 +205,7 @@ class Derivative(_Stateless, BaseEstimator, TransformerMixin):
 
 
 class ScatterCorrection(BaseEstimator, TransformerMixin):
-    '''l1 / l2 / max / snv / msc in series; msc keeps the mean training spectrum as reference.'''
+    '''l1 / l2 / max / snv / msc / detrend in series; msc keeps the mean training spectrum as reference.'''
 
     def __init__(self, scaler=('snv',)):
         self.scaler = scaler
@@ -210,6 +232,8 @@ class ScatterCorrection(BaseEstimator, TransformerMixin):
                 else:
                     A, _ = _msc(A, self.references_[n_msc])
                 n_msc += 1
+            elif sc == 'detrend':
+                A = _detrend(A)
         return pd.DataFrame(A, columns=cols, index=idx)
 
     def fit(self, X, y=None):
@@ -259,7 +283,8 @@ class Decomposition(BaseEstimator, TransformerMixin):
 
 
 class VarianceThresholdSelect(BaseEstimator, TransformerMixin):
-    '''Drop bands whose variance (after minmax / standard / robust scaling) is below threshold.'''
+    '''Drop bands whose variance (after minmax scaling) is below threshold; scaler is kept for models fitted before
+    2026-10-31 (standard / robust).'''
 
     def __init__(self, scaler='minmax', threshold=0.025):
         self.scaler = scaler
@@ -361,7 +386,168 @@ class RegressorFrame(_Stateless, BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         X = _Numeric_frame(X)
-        return X.set_axis(['f_%s' % c for c in X.columns], axis=1)
+        return X.set_axis(['f_%s' % (re.sub(r'[^0-9A-Za-z]+', '_', c) if isinstance(c, str) else c)
+                           for c in X.columns], axis=1)
+
+
+class CappedPLSRegression(PLSRegression):
+    '''PLSRegression with n_components capped at fit to the rank of the centred X (at most n_samples - 1).
+
+    The rank, not the number of features: the one-hot columns of a nominal covariate sum to 1, so after centring they
+    lose one dimension. A component beyond the rank is numerical noise and gives wild coefficients.
+    The requested n_components stays the parameter (clone, get_params, manifest); the number used is n_components_,
+    fit_shape_ the (samples, features) it was fitted on and fit_rank_ the rank of the centred X.
+    '''
+
+    def fit(self, X, y=None, **kwargs):
+        requested = self.n_components
+        self.fit_shape_ = tuple(int(n) for n in np.shape(X)[:2])
+        Xa = np.asarray(X, dtype=float)
+        self.fit_rank_ = int(np.linalg.matrix_rank(Xa - Xa.mean(axis=0))) if Xa.size else 0
+        cap = max(1, min(self.fit_shape_[0] - 1, self.fit_rank_))   # centring takes one degree of freedom
+        self.n_components_ = min(requested, cap)
+        self.n_components = self.n_components_
+        try:
+            return super().fit(X, y, **kwargs)
+        finally:
+            self.n_components = requested
+
+
+def Pls_cap_text(regressor):
+    '''"n_components 10 → 5 (120 samples, 5 features)" if a fitted CappedPLSRegression was capped, else "".
+    The rank is added when it is below the number of features, e.g. "(130 samples, 8 features, rank 7)".'''
+    used = getattr(regressor, 'n_components_', None)
+    if used is None or used >= regressor.n_components:
+        return ''
+    n, p = regressor.fit_shape_
+    rank = getattr(regressor, 'fit_rank_', p)
+    return 'n_components %d → %d (%d samples, %d features%s)' % (
+        regressor.n_components, used, n, p, ', rank %d' % rank if rank < p else '')
+
+
+# ------------------------------------------------------------------ covariates
+
+def Parse_class_grouping(raw):
+    '''class_grouping parameter → {covariate label: {class: group name}}. Raises ValueError if invalid.
+
+    raw: array of objects {"covariate": <label>, "groups": [[class, class ...], [class ...] ...]} (a JSON string of
+    that array is also accepted). A group is named by its classes joined with "|".
+    '''
+    if hasattr(raw, '__dict__') and not isinstance(raw, type):
+        raw = vars(raw)
+
+    if isinstance(raw, str):
+        s = raw.strip()
+        while len(s) >= 2 and s[0] + s[-1] == '{}' and not s.startswith('{"'):
+            s = s[1:-1].strip()
+        if not s:
+            return {}
+        try:
+            raw = json.loads(s)
+        except json.JSONDecodeError as e:
+            raise ValueError('class_grouping is not valid JSON: %s' % e)
+
+    if isinstance(raw, dict):
+        raw = [raw]
+
+    grouping = {}
+
+    for item in raw or []:
+        if hasattr(item, '__dict__') and not isinstance(item, type):
+            item = vars(item)
+        if not isinstance(item, dict) or 'covariate' not in item or 'groups' not in item:
+            raise ValueError('class_grouping items must be {"covariate": <label>, "groups": [[classes] ...]}, got %s'
+                             % (item,))
+        class_D = {}
+        for group in item['groups']:
+            members = [str(c) for c in (group if isinstance(group, (list, tuple)) else [group])]
+            for c in members:
+                if c in class_D:
+                    raise ValueError('class_grouping %s: class "%s" in more than one group' % (item['covariate'], c))
+                class_D[c] = '|'.join(members)
+        grouping[str(item['covariate'])] = class_D
+
+    return grouping
+
+
+def Group_classes(values, class_D=None):
+    '''Class values as strings (missing → None), pooled into groups by class_D {class: group}; a class not in
+    class_D is kept as it is.'''
+
+    out = pd.Series(values).astype(object)
+
+    out = out.where(out.notna(), None).map(lambda v: None if v is None else str(v))
+
+    return out.map(lambda v: v if v is None or not class_D else class_D.get(v, v))
+
+
+class CovariateBlocks(BaseEstimator, TransformerMixin):
+    '''Spectra + covariates as one feature frame.
+
+    spectra: Pipeline refitting the preprocessing chain, applied to every column that is not a covariate.
+    numeric: covariates standardised with the mean and standard deviation of the training samples (cv:<label>);
+    models saved before the standardisation have no numeric_mean_ and keep the values as they are.
+    nominal: class covariates, pooled by grouping {label: {class: group}} and one-hot encoded with the classes of
+    the training samples (cv:<label>=<class>). A class not seen in training gives all zeros; the model and predict
+    processes skip such samples.
+    '''
+
+    def __init__(self, spectra=None, numeric=(), nominal=(), grouping=None):
+        self.spectra = spectra
+        self.numeric = numeric
+        self.nominal = nominal
+        self.grouping = grouping
+
+    def _Classes(self, X, label):
+        return Group_classes(X[label].values, (self.grouping or {}).get(label)).values
+
+    def fit(self, X, y=None):
+        covariates = list(self.numeric) + list(self.nominal)
+        self.spectral_columns_ = [c for c in X.columns if c not in covariates]
+        self.spectra_ = clone(self.spectra).fit(X[self.spectral_columns_], y)
+        self.numeric_mean_, self.numeric_std_ = {}, {}
+        for label in self.numeric:
+            values = X[label].astype(float).values
+            self.numeric_mean_[label] = float(np.nanmean(values))
+            self.numeric_std_[label] = float(np.nanstd(values))   # 0: constant, only centred (Constant_covariates)
+        self.levels_ = {label: sorted({c for c in self._Classes(X, label) if c is not None})
+                        for label in self.nominal}
+        return self
+
+    def transform(self, X):
+        parts = [self.spectra_.transform(X[self.spectral_columns_]).set_axis(X.index, axis=0)]
+        if len(self.numeric):
+            mean, std = getattr(self, 'numeric_mean_', {}), getattr(self, 'numeric_std_', {})
+            parts.append(pd.DataFrame({COVARIATE_PREFIX + label: (X[label].astype(float).values - mean.get(label, 0.0))
+                                       / (std.get(label, 1.0) or 1.0) for label in self.numeric}, index=X.index))
+        for label in self.nominal:
+            classes = self._Classes(X, label)
+            parts.append(pd.DataFrame({'%s%s=%s' % (COVARIATE_PREFIX, label, c): (classes == c).astype(float)
+                                       for c in self.levels_[label]}, index=X.index))
+        return pd.concat(parts, axis=1)
+
+    def Constant_covariates(self):
+        '''Covariates that did not vary in the training samples (numeric std 0, nominal one class): no effect.'''
+        return ([label for label, std in getattr(self, 'numeric_std_', {}).items() if std == 0]
+                + [label for label in self.nominal if len(self.levels_[label]) < 2])
+
+    def Unseen(self, X):
+        '''Boolean array, True for rows with a missing covariate or a class (after grouping) not seen in training.'''
+        bad = np.zeros(len(X), dtype=bool)
+        for label in self.numeric:
+            bad |= pd.isna(X[label]).values
+        for label in self.nominal:
+            levels = set(self.levels_[label])
+            bad |= np.array([c is None or c not in levels for c in self._Classes(X, label)], dtype=bool)
+        return bad
+
+
+def Model_blocks(model):
+    '''The fitted CovariateBlocks step of a saved model, or None for a spectra-only model.'''
+
+    pipe = getattr(model, 'regressor_', model)
+
+    return getattr(pipe, 'named_steps', {}).get('blocks')
 
 
 # ------------------------------------------------------------------ indicator (target) transformer
@@ -499,6 +685,9 @@ def Chain_to_steps(chain, indicator, test_size):
 
         if proc == 'detect_outliers':
             notes.append('%s: indicator outliers were set to missing using all samples (not refitted)' % name)
+            continue
+
+        if proc == 'indicator_range':   # fixed limits, nothing learned from the samples
             continue
 
         if proc == 'select_variance_threshold':

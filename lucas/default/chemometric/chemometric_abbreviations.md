@@ -18,7 +18,7 @@ Every pre-process adds its abbreviation to the name of its input dataframe, sepa
 
 ## Abbreviation table
 
-`{n}` is a number taken from the step settings: decimals are written with `p` instead of a dot (sigma 1.5 → `gf1p5`), and a leading `0.` is dropped (threshold 0.028 → `vtm028`).
+`{n}` is a number taken from the step settings: decimals are written with `p` instead of a dot (sigma 1.5 → `gf1p5`), and a leading `0.` is dropped (threshold 0.028 → `vt028`).
 
 | Abbreviation | Method | Category |
 |---|---|---|
@@ -27,6 +27,7 @@ Every pre-process adds its abbreviation to the name of its input dataframe, sepa
 | `olee` | Elliptic envelope outlier detection | Indicator outliers |
 | `ollof` | Local outlier factor outlier detection | Indicator outliers |
 | `ol1csvm` | One-class SVM outlier detection | Indicator outliers |
+| `ir` | Indicator values outside a [min, max] range set to missing | Indicator range |
 | `ma{n}` | Moving average, n = kernel length (e.g. `ma5`) | Filter |
 | `gf{n}` | Gaussian filter, n = sigma (e.g. `gf2`, `gf1p5`) | Filter |
 | `sg{n}` | Savitzky-Golay smoothing, n = window length (e.g. `sg7`) | Filter |
@@ -38,14 +39,15 @@ Every pre-process adds its abbreviation to the name of its input dataframe, sepa
 | `max` | Max norm (peak normalisation) | Scatter correction |
 | `snv` | Standard Normal Variate | Scatter correction |
 | `msc` | Multiplicative Scatter Correction | Scatter correction |
-| `snvsnv`, `l1snv` ... | Scatter corrections in sequence (concatenated) | Scatter correction |
+| `dt` | Detrend (2nd-order polynomial baseline subtracted per spectrum) | Scatter correction |
+| `snvdt`, `snvmsc` ... | Scatter corrections in sequence (concatenated) | Scatter correction |
 | `d1`, `d2` ... | First, second ... order finite-difference derivative | Derivative |
 | `d1app` ... | Derivative appended to the original bands | Derivative |
 | `mc` | Meancentring | Variable scaling |
 | `as` | Autoscaling (meancentring + unit variance) | Variable scaling |
 | `ps` | Pareto scaling (divide by √std) | Variable scaling |
 | `poi` | Poisson scaling (divide by √mean) | Variable scaling |
-| `vt{s}{n}` | Variance threshold, s = scaler (`m` minmax, `s` standard, `r` robust), n = threshold (e.g. `vtm028`) | Band reduction |
+| `vt{n}` | Variance threshold on minmax-scaled bands, n = threshold without the leading "0." (e.g. `vt028`; files before 2026-10-31: `vtm028`) | Band reduction |
 | `wc{n}` | Ward agglomerative clustering, n = number of clusters (e.g. `wc40`) | Band reduction |
 | `pca{n}` | PCA, n = number of components (e.g. `pca5`) | Decomposition |
 | `uv` | Univariate selection — combined across indicators | Feature selection |
@@ -56,11 +58,11 @@ Every pre-process adds its abbreviation to the name of its input dataframe, sepa
 
 ## User name extension
 
-Outlier detection, filters, the multi-filter, variance threshold, Ward clustering and the chemometric chain accept the parameter `name_extension` (1-6 letters, digits or `-`), added after a hashtag: `1350-2500_10.ma5#12321` for a moving average with the kernel weights [1, 2, 3, 2, 1]. Use it to tell apart outputs whose settings the abbreviation does not show.
+Outlier detection, indicator range, filters, the multi-filter, variance threshold, Ward clustering and the chemometric chain accept the parameter `name_extension` (1-6 letters, digits or `-`), added after a hashtag: `1350-2500_10.ma5#12321` for a moving average with the kernel weights [1, 2, 3, 2, 1]. Use it to tell apart outputs whose settings the abbreviation does not show.
 
 ## Chaining rules
 
-Chained scatter corrections (two or more in the `scaler` list) concatenate their abbreviations without separator, e.g. `snv` + `snv` → `snvsnv`.
+Chained scatter corrections (two or more in the `scaler` list) concatenate their abbreviations without separator, e.g. `snv` + `detrend` → `snvdt`. A step that cannot change the result prints a warning: l1, l2, max, snv or msc before a later snv (identical to leaving it out), and l1, l2 or max before a later msc (almost identical).
 
 Every other step adds its own abbreviation after a dot, applied left-to-right; each step uses the previous step's output as input. A `chemometric_chain` gives the same name as running its steps one by one.
 

@@ -1,0 +1,183 @@
+{
+  "process": [
+    {
+      "process": "add_process",
+      "overwrite": false,
+      "parameters": {
+        "root_process": "manage_table_data",
+        "process": "manage_method_pipeline_step",
+        "min_user_stratum": 3,
+        "title": "Manage method pipeline step",
+        "label": "Insert, update or delete a numbered step of a method pipeline, referencing its lab protocol, primer pair, software and taxonomy reference"
+      },
+      "nodes": [
+        {
+          "parent": "process",
+          "element": "parameters",
+          "parameter": [
+            {
+              "parameter": "method_pipeline_id__method_pipeline_name",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Pipeline the step belongs to",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "step",
+              "parameter_type": "integer",
+              "required": true,
+              "default_value": "",
+              "hint": "Step number, 1 = first step",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": false,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "stage",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "laboratory or bioinformatics",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "name",
+              "parameter_type": "text",
+              "required": true,
+              "default_value": "",
+              "hint": "Name of the step, e.g. paired-end merging",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "lab_protocol_id__lab_protocol_name",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Lab protocol of a laboratory step; leave blank if none",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "edna_primer_pair_id__edna_primer_pair_name",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Primer pair of an amplification step; leave blank if none",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "software_id__software_alias",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Software of a bioinformatics step as its alias '<name> <version>'; leave blank if none",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "taxonomy_reference_id__taxonomy_reference_alias",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Taxonomy reference as its alias '<name> <version>'; leave blank if none",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "parameters",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "{}",
+              "hint": "Step parameters as a JSON object, e.g. {\"min_overlap\": 10}; {} if none",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            },
+            {
+              "parameter": "abstract",
+              "parameter_type": "text",
+              "required": false,
+              "default_value": "",
+              "hint": "Abstract describing the step",
+              "schema_table": {
+                "schema": "observation_utility",
+                "table": "method_pipeline_step",
+                "write": true
+              },
+              "permission": {
+                "update": true,
+                "delete": false
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-#########################################
+###############################################
 ##### DEFINE DB, SCHEMAS AND TABELS #####
-#########################################
+###############################################
 
 ###===========================================###
 ### SCHEMAS ###
@@ -9,9 +9,9 @@
 
 schema/schema_v10_sql.json
 
-###===================================###
-### GENERAL UTILITIES AND TERRITORIES ###
-###===================================###
+###===========================================###
+### GENERAL UTILITIES AND TERRITORIES###
+###===========================================###
 #!!!!! Territory codes are required by community
 
 utility/utility_v10_sql.json
@@ -65,26 +65,23 @@ process/processes_v10_sql.json
 # processes records adds the processes for adding all other processes
 process/processes_records_v10_sql.json
 
-###=======================###
+###===========================================###
 ### OBSERVATION UTILITIES ###
-###=======================###
+###===========================================###
 #!!!!! observation utilities contain all catalogues
 #!!!!! required for adding observation related data.
 #!!!!! Do not change order of setup as some catalogues
 #!!!!! have foreign keys for others
 
-#================================================================#
+#===========================================#
 #==== Observation utilities without foreign key dependencies ====#
-#================================================================#
+#===========================================#
 
-# Analysis method records all types of analysis/observation methods that are utilised.
-# You can not add an analysis unless its method is recorded.
-# Inserted with id = 0 for unknown/undisclosed analysis method.
+# Analysis method
 observation_utility/analysis_method_v10_sql.json
 
 # Apparatus is a very generalised description of anything that can deliver data.
-# Each observation requires an apparatus to be recorded.
-# Inserted with id = 0 for unknown/undisclosed apparatus.
+# Inserted with id = 0 for unknown/undisclosed apparatus
 observation_utility/apparatus_v10_sql.json
 
 # Classification contains 5 hierarchies (tables) for substance classification:
@@ -110,12 +107,21 @@ observation_utility/image_v10_sql.json
 observation_utility/license_v10_sql.json
 
 # Location method for determining geolocation
-# Inserted with id = 0 for unknown/undisclosed location method
+# Inserted with id = 0 for unknown/undisclosed method
 observation_utility/location_method_v10_sql.json
+
+# Macrofauna contains two tables:
+# -macrofauna_extraction_method,
+# -life_cycle_stage
+observation_utility/macrofauna_v10_sql.json
 
 # Method tier is a classification of different observation/analysis types.
 # Inserted with id = 0 for unknown/undisclosed method tier.
 observation_utility/method_tier_v10_sql.json
+
+# Monolith extraction method (e.g. block of soil, sediment or ice-core).
+# Inserted with id = 0 for unknown/undisclosed method.
+observation_utility/monolith_extraction_v10_sql.json
 
 # Preparation method prior to sample analysis (that is not part of a standard method itself).
 # Inserted with id = 0 for no preparation.
@@ -129,8 +135,11 @@ observation_utility/preservation_v10_sql.json
 # Inserted with id = 0 for unknown provider.
 observation_utility/provider_v10_sql.json
 
-# Quantity - unambiguous definition of the quantities that observation values represent.
+# Quantity - unambiguous definition of the quantitites that observation values represent.
 observation_utility/quantity_v10_sql.json
+
+# Reference proprietor - any source of external archive or library used for deriving observation values
+observation_utility/reference_proprietor_v10_sql.json
 
 # Setting system for defining local juxtapositions.
 # Where system is a thematic frame for defining specific juxtapositions (e.g. for fields, forests, lakes etc).
@@ -139,6 +148,12 @@ observation_utility/setting_system_v10_sql.json
 
 # Soil horizon for defining scientific soil horizons.
 observation_utility/soil_horizon_v10_sql.json
+
+# Sound includes tables for:
+# -sound_setup,
+# -sound_mic.
+# Both are inserted with id = 0 for unknown/undisclosed.
+observation_utility/sound_v10_sql.json
 
 # Spatial reference systems used for geolocation, mainly based on EPSG standard codes.
 # Inserted with id = 0 for unknown/undisclosed spatial reference.
@@ -158,9 +173,9 @@ observation_utility/transportation_v10_sql.json
 # unit of reported observation value.
 observation_utility/unit_v10_sql.json
 
-#=========================================================#
-#==== Observation utilities dependent on foreign keys ====#
-#=========================================================#
+#===========================================#
+#==== Observation utilities dependent on foreign keys in other observation utilities ====#
+#===========================================#
 
 # Analysis method translate for converting analysis results between comparable methods.
 # requires: species, method (source and destination).
@@ -207,9 +222,57 @@ observation_utility/nominal_classification_v10_sql.json
 # requires: unit.
 observation_utility/unit_translate_v10_sql.json
 
-###=============###
+# Software used in analysis pipelines (e.g. eDNA bioinformatics), with version, url and doi.
+observation_utility/software_v10_sql.json
+
+# eDNA primer pair (forward + reverse primer used together in PCR), with marker gene and target group.
+observation_utility/edna_primer_pair_v10_sql.json
+
+# Lab protocol for laboratory steps (extraction, amplification, purification, sequencing ...).
+observation_utility/lab_protocol_v10_sql.json
+
+###===========================================###
+### ORGANISM UTILITIES ###
+###===========================================###
+#!!!!! Biological reference data: taxonomy and taxon functions.
+#!!!!! Must precede OBSERVATION (macrofauna references taxon).
+
+# Taxonomy reference (e.g. SILVA, UNITE, GBIF backbone) with release version.
+organism_utility/taxonomy_reference_v10_sql.json
+
+# Taxon rank in the Linnean classification system, with lineage prefix (k__, p__ ...).
+organism_utility/taxon_rank_v10_sql.json
+
+# Taxon status (accepted, synonym).
+organism_utility/taxon_status_v10_sql.json
+
+# Taxon defines a taxonomic tree node (parent, rank, status, source reference).
+# requires: taxon_rank, taxon_status, taxonomy_reference.
+organism_utility/taxon_v10_sql.json
+
+# Taxon parity links synonymous taxa.
+# requires: taxon.
+organism_utility/taxon_parity_v10_sql.json
+
+# Taxon function defines ecosystem functions (e.g. FAPROTAX, FUNGuild categories).
+organism_utility/taxon_function_v10_sql.json
+
+###===========================================###
+### METHOD PIPELINES ###
+###===========================================###
+#!!!!! Multi-step analysis methods (e.g. eDNA metabarcoding), one row per step.
+#!!!!! Placed after ORGANISM UTILITIES as steps reference organism_utility.taxonomy_reference.
+
+# Method pipeline (linked to analysis_method) and its numbered steps, each referencing
+# lab_protocol, edna_primer_pair, software and taxonomy_reference. Tables only: the content
+# (e.g. ai4sh-16s, ai4sh-its) is inserted from excel in the utility insert chain
+# (import_data/utility/observation, EDNA UTILITIES section).
+# requires: analysis_method, lab_protocol, edna_primer_pair, software, taxonomy_reference.
+observation_utility/method_pipeline_v10_sql.json
+
+###===========================================###
 ### OBSERVATION ###
-###=============###
+###===========================================###
 
 # Observation data source is a simplified copy of community.organisation.
 # Separated as data sources might only be passive suppliers.
@@ -226,6 +289,7 @@ observation/dataset_v10_sql.json
 
 # Campaign is a child to dataset where methods can vary in details between individual campaigns.
 # LUCAS 2009, 2015 are individual campaigns under the LUCAS dataset.
+# Each pilot site in AI4SoilHealth is a campaign.
 observation/campaign_v10_sql.json
 
 # Sampling log defines a sampling event belonging to a campaign.
@@ -233,16 +297,15 @@ observation/campaign_v10_sql.json
 # with the same methods and responsible person over a longer period.
 observation/sampling_log_v10_sql.json
 
+
+
 # Sample geolocation for samples with a spatial reference.
 observation/sample_geolocation_v10_sql.json
 
 # Sample defines individual samples acquired under a sampling_log
 observation/sample_v10_sql.json
 
-# Observation log references sampling log and
-# defines a provision (instrument, service etc) and its method tier,
-# and the sample logistics (preservation, preparation, storage etc).
-# A sample can be analysed with multiple provisions and with the same provision over time.
+# Observation log references sampling log and defines a provision (instrument, service etc) and its method tier, and the sample logistics (preservation, preparation, storage etc)
 observation/observation_log_v10_sql.json
 
 # Observation links together:
@@ -251,21 +314,42 @@ observation/observation_log_v10_sql.json
 # -provision (and provision serial nr if given).
 observation/observation_v10_sql.json
 
+
+# Infiltration BeerKan is an extension of observation.
+# The extension consists of 2 tables:
+# -infiltration_beerkan,
+# -infiltration_beerkan_time.
+observation/infiltration_beerkan_v10_sql.json
+
+# Macrofauna is an extension of observation.
+# The extension consists of 2 tables:
+# -monolith,
+# -macrofauna.
+observation/macrofauna_v10_sql.json
+
+# Macrofauna image defines images used for automated macrofauna detection.
+observation/macrofauna_image_v10_sql.json
+
 # Measurement links together an observation and an indicator
 observation/measurement_v10_sql.json
 
-###===================###
-### LANDSCAPE UTILITY ###
-###===================###
+# eDNA ASVs (one row per amplicon sequence variant and method pipeline, linked to the
+# deepest resolved taxon) and their abundance per observation (relative abundance,
+# rarefied read count and, when delivered, raw read count).
+# requires: observation, observation_utility.method_pipeline, organism_utility.taxon.
+observation/edna_asv_v10_sql.json
 
-### Landscape utility are for data acquired at a larger spatial scale.
-### Landscape data are linked via geolocation (not sample) and can
-### record time series of landscape conditions, e.g. prior to acquiring a sample
+# eDNA read counts in and out of each bioinformatics pipeline step per observation
+# (empty until the laboratory delivers e.g. the DADA2 denoising stats).
+# requires: observation, observation_utility.method_pipeline_step.
+observation/edna_run_step_v10_sql.json
 
-# Crop stage is for recording growing seasons at landscape level
+###===========================================###
+### LANDSCAPE UTILITY
+###===========================================###
+
 landscape_utility/crop_growth_stage_v10_sql.json
 
-# Biogeo16 (biogeography) is a static (date of validation is 2016) EU level spatial dataset
 landscape_utility/biogeo16_v10_sql.json
 
 # Class rank is the catalogue of ranks (order, family, genus) for hierarchical landscape classifications
@@ -298,13 +382,19 @@ landscape_utility/ground_conditions_v10_sql.json
 # Soil preparation
 landscape_utility/soil_preparation_v10_sql.json
 
-# LEFT TODO extend Landscape utility with
+# TG TODO complete
+# Landscape utility includes tables for:
+
 # -cultivation species
 # -erosion conservation measure
 
-###===========###
-### LANDSCAPE ###
-###===========###
+
+###===========================================###
+### LANDSCAPE
+###===========================================###
+
+# TG TODO complete
+### REMOVE TO RUN ###landscape/observation_v10_sql.json
 
 # observation_lucc contains tables for:
 # - landuse observation
