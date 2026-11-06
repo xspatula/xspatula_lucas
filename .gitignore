@@ -111,12 +111,9 @@ setup/zzz/lucas/setup_db/json/audit/audit_triggers_ml_setting_v10_sql.json
 
 
 # =============================================================
-# Side development of organisms and eDNA
+# Side development of organisms and eDNA (data only)
 # =============================================================
 lucas/import_data/eDNA/
-setup/zzz/lucas/setup_db/json/organism/
-setup/zzz/lucas/setup_db/json/organism_utility/
-setup/zzz/lucas/setup_processes/json/organism_utlity/
 
 # LibreOffice lock files
 .~lock.*#
