@@ -63,7 +63,7 @@ from src.postgres import User_netrc_credentials, User_login_pswd
 
 from .setup_db import Initiate_session, Setup_prod_roles, INITIAL_DATABASE_NAME
 
-from .setup_db_initiate import Get_user_response_boolean, Create_db_environment_dot
+from .setup_db_initiate import Get_user_response_boolean, Create_db_environment_dot, Resolve_db_users
 
 DEFAULT_DUMP_FOLDER = '~/xspatula/db_dump'
 
@@ -372,6 +372,12 @@ def Restore_database(notebook_FP, scheme_file):
     if 'db_users' in scheme_params_D['postgresdb']:
 
         print('\n. Creating/granting database roles')
+
+        if not Resolve_db_users(scheme_params_D['postgresdb']):
+
+            print('❌ ERROR - db_users not resolved, roles not created (database itself is restored)')
+
+            return None
 
         # Same as the main setup: per-role .env files, then CREATE USER/GRANT for missing roles
         Create_db_environment_dot(notebook_FP, scheme_params_D['postgresdb'])

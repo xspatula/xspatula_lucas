@@ -122,3 +122,8 @@ lucas/import_data/eDNA/
 # Development data
 # =============================================================
 notes/
+
+# =============================================================
+# Scheme files holding plaintext passwords - use *_netrc_id instead
+# =============================================================
+*_pswd.json
