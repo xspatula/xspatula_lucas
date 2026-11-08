@@ -8,6 +8,7 @@
         "dataframe": "previous",
         "indicator_array": ["c-org","sand"],
         "regressor_array": ["ols","huber"],
+        "indicator_transformation": "none",
         "model_parameters_fp":"./project_lucas_2009/regressors/regression_model_parameters.json",
         "traintest": true,
         "test_size": 0.3,
