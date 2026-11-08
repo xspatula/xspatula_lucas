@@ -123,6 +123,9 @@ lucas/import_data/eDNA/
 # =============================================================
 notes/
 
+# Synthetic example dataset (derived from LUCAS 2015, local only - licence)
+synthetic_dataset/
+
 # =============================================================
 # Scheme files holding plaintext passwords - use *_netrc_id instead
 # =============================================================

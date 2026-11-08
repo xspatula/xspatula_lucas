@@ -1,0 +1,14 @@
+{
+  "project_path": "./lucas",
+  "user_project": {
+    "user_netrc_id": "synthetic_initial_user"
+  },
+  "process": [
+    {
+      "execute": true,
+      "verbose": 1,
+      "overwrite": false,
+      "delete": false
+    }
+  ]
+}
