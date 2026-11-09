@@ -59,8 +59,8 @@ community/user_records_v10_sql.json
 # - process_parameter_default (if a parameter can be automatically selected from another schema.table.record)
 process/processes_v10_sql.json
 
-#!!!!! You must edit the object "creator" in processes_records_v10_sql.json
-#!!!!! to the name of your initial bootstrap user before the records are accepted.
+# "creator" in processes_records_v10_sql.json is "{initial_user}": filled with the
+# user_name of the scheme's initial_user (the community.user seed row above).
 
 # processes records adds the processes for adding all other processes
 process/processes_records_v10_sql.json

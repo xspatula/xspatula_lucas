@@ -38,11 +38,11 @@
     ]
   },
   "initial_user": {
-    "user_netrc_id": "synthetic_initial_user",
-    "email": "someone@example.com",
-    "email_alt": "someone_else@example.com",
-    "first_name": "Some",
-    "last_name": "One",
+    "user_netrc_id": "ini_user_synthetic",
+    "email": "initial_user@example.com",
+    "email_alt": "initial_user_alt@example.com",
+    "first_name": "Initial",
+    "last_name": "User",
     "organisation_id__organisation_name": "xspectre",
     "territory_id__territory_name": "sweden",
     "stratum_code": "5"

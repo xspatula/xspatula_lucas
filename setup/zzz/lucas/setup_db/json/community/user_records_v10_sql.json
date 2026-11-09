@@ -22,12 +22,12 @@
           "values": [
             [
               "xspectre",
-              "someone@exspectre.com",
-              "someone_else@xspectre.com",
+              "initial_user@example.com",
+              "initial_user_alt@example.com",
               "{initial_user}",
-              "Some",
-              "One",
-              "someone",
+              "Initial",
+              "User",
+              "initial_user",
               "sweden",
               "5"
             ]
