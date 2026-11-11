@@ -1,0 +1,51 @@
+{
+  "process": [
+    {
+      "process": "regression_modeling",
+      "overwrite": true,
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_calibration_10nm",
+        "dataframe": "synthetic_calibration_10nm.olif.snv.mc",
+        "indicator_array": [
+          "c-org",
+          "n-tot",
+          "ph-water",
+          "clay"
+        ],
+        "regressor_array": [
+          "plsr",
+          "svr",
+          "randfor",
+          "cubist"
+        ],
+        "model_parameters_fp": "default",
+        "indicator_transformation": "standard",
+        "indicator_standardisation": "none",
+        "refit_preprocessing": true,
+        "traintest": true,
+        "test_size": 0.3,
+        "kfold": false,
+        "model_fp": "./project_synthetic/models",
+        "show_observed_predicted": true,
+        "save_observed_predicted": false,
+        "covariate_array": [
+          "landuse"
+        ],
+        "class_grouping": [
+          {
+            "covariate": "landuse",
+            "groups": [
+              [
+                "agriculture"
+              ],
+              [
+                "forestry"
+              ]
+            ],
+            "other": "exclude"
+          }
+        ]
+      }
+    }
+  ]
+}

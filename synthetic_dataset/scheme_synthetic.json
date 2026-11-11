@@ -1,0 +1,14 @@
+{
+  "project_path": "../synthetic_dataset",
+  "user_project": {
+    "user_netrc_id": "ini_user_synthetic"
+  },
+  "process": [
+    {
+      "execute": true,
+      "verbose": 1,
+      "overwrite": false,
+      "delete": false
+    }
+  ]
+}

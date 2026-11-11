@@ -1,0 +1,7 @@
+{
+  "process": {
+    "job_folder": "import_data/spectra/spectrometer",
+    "process_sub_folder": "manage_process",
+    "pilot_file": "spectrometer_pilot.txt"
+  }
+}

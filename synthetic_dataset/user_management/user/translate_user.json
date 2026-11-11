@@ -1,0 +1,13 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_user",
+        "tabular_data_path": "user_management/user/excel/user.xlsx",
+        "dst_path": "user_management/user/manage_process"
+      }
+    }
+  ]
+}

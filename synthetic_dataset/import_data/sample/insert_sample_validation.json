@@ -1,0 +1,22 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_geolocation",
+        "tabular_data_path": "import_data/sample/excel/geolocation_validation.xlsx",
+        "dst_path": "import_data/sample/staging/validation"
+      }
+    },
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_geolocated_profile_sample",
+        "tabular_data_path": "import_data/sample/excel/sample_validation.xlsx",
+        "dst_path": "import_data/sample/staging/validation"
+      }
+    }
+  ]
+}

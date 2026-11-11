@@ -123,8 +123,26 @@ lucas/import_data/eDNA/
 # =============================================================
 notes/
 
-# Synthetic example dataset (derived from LUCAS 2015, local only - licence)
-synthetic_dataset/
+# Synthetic example dataset (derived from LUCAS 2015). Code, process files, utility excels and output-stripped
+# notebooks are tracked; the LUCAS-derived data stay local until the data owner allows distribution (2026-11-11).
+synthetic_dataset/data/
+synthetic_dataset/prepare/cache/
+synthetic_dataset/prepare/output/
+synthetic_dataset/prepare/output_run.log
+synthetic_dataset/project_synthetic/data/
+synthetic_dataset/project_synthetic/models/
+synthetic_dataset/**/staging/
+synthetic_dataset/import_data/spectra/calibration/
+synthetic_dataset/import_data/spectra/validation/
+synthetic_dataset/import_data/lab/excel/
+synthetic_dataset/import_data/sample/excel/
+synthetic_dataset/import_data/landscape/excel/
+synthetic_dataset/import_data/observation_log/excel/
+synthetic_dataset/user_management/user/manage_process/
+# obsolete, to be deleted (old database name, plaintext passwords; switch_db moved to setup/)
+synthetic_dataset/setup/
+synthetic_dataset/scheme_synthetic_admin.json
+synthetic_dataset/switch_db.py
 
 # =============================================================
 # Scheme files holding plaintext passwords - use *_netrc_id instead

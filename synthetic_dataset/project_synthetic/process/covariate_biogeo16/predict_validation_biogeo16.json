@@ -1,0 +1,49 @@
+{
+  "process": [
+    {
+      "process": "predict_independent",
+      "overwrite": true,
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_validation_10nm",
+        "dataframe": "synthetic_validation_10nm",
+        "model_array": [
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_c-org_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_c-org_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_c-org_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_c-org_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_c-org_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_c-org_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_c-org_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_c-org_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_n-tot_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_n-tot_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_n-tot_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_n-tot_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_n-tot_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_n-tot_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_n-tot_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_n-tot_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_ph-water_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_ph-water_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_ph-water_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_ph-water_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_ph-water_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_ph-water_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_ph-water_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_ph-water_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_clay_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_clay_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_clay_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_clay_cubist_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_clay_plsr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_clay_svr_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_clay_randfor_tt.joblib",
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_tt/synthetic_calibration_10nm.olif.snv.mc_cv-biogeo16_clay_cubist_tt.joblib"
+        ],
+        "dst_fp": "./project_synthetic/data/predictions/synthetic_validation_10nm_biogeo16",
+        "show_observed_predicted": true,
+        "save_plot_layout": true
+      }
+    }
+  ]
+}

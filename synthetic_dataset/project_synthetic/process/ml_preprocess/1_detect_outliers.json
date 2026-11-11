@@ -1,0 +1,18 @@
+{
+  "process": [
+    {
+      "process": "detect_outliers",
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_calibration_10nm",
+        "dataframe": "raw",
+        "indicator_array": [
+          "c-org",
+          "n-tot",
+          "ec"
+        ],
+        "detector": "iforest",
+        "threshold": 0.05
+      }
+    }
+  ]
+}

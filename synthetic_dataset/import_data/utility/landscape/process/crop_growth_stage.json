@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "parameters": {
+        "process": "manage_crop_growth_stage",
+        "tabular_data_path": "import_data/utility/landscape/excel/crop_growth_stage.xlsx",
+        "dst_path": "import_data/utility/landscape/manage_process"
+      }
+    }
+  ]
+}

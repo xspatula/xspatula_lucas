@@ -1,0 +1,7 @@
+{
+  "process": {
+    "job_folder": "import_data/spectra/validation",
+    "process_sub_folder": "manage_process",
+    "pilot_file": "spectra_pilot.txt"
+  }
+}

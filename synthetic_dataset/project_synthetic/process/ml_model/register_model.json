@@ -1,0 +1,14 @@
+{
+  "process": [
+    {
+      "process": "register_model",
+      "parameters": {
+        "model_array": [
+          "./project_synthetic/models/synthetic_calibration_10nm.olif.snv.mc_tt/synthetic_calibration_10nm.olif.snv.mc_c-org_plsr_tt.joblib"
+        ],
+        "name": "synthetic_c-org_plsr",
+        "abstract": "Organic carbon from synthetic FOSS XDS 10 nm spectra (calibration set, 2000 composites of LUCAS 2015 points); SNV + meancentring, PLSR, standard indicator transformation. Example model, not for real predictions."
+      }
+    }
+  ]
+}

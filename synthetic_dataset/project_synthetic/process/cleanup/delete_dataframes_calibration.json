@@ -1,0 +1,14 @@
+{
+  "process": [
+    {
+      "process": "delete_dataframes",
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_calibration_10nm",
+        "keep_array": [
+          "raw",
+          "synthetic_calibration_10nm.olif.snv.mc"
+        ]
+      }
+    }
+  ]
+}

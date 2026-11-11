@@ -1,0 +1,31 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_land_cover_observation",
+        "tabular_data_path": "import_data/landscape/excel/land_cover_calibration.xlsx",
+        "dst_path": "import_data/landscape/staging/calibration"
+      }
+    },
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_land_use_observation",
+        "tabular_data_path": "import_data/landscape/excel/land_use_calibration.xlsx",
+        "dst_path": "import_data/landscape/staging/calibration"
+      }
+    },
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_biogeo16_observation",
+        "tabular_data_path": "import_data/landscape/excel/biogeo16_calibration.xlsx",
+        "dst_path": "import_data/landscape/staging/calibration"
+      }
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# Notebook outputs are stripped on commit by nbstripout (pip install nbstripout; nbstripout --install)
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb

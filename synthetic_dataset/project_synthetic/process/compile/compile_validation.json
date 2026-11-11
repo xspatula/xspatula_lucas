@@ -1,0 +1,38 @@
+{
+  "process": [
+    {
+      "process": "compile_dataset_from_db",
+      "overwrite": false,
+      "parameters": {
+        "dataset": "synthetic",
+        "sampling_log": "syn-val_2026",
+        "min_profile": 0,
+        "max_profile": 20,
+        "spectra_provision": "foss-xds-10nm",
+        "spectra_preparation_name": "ds2",
+        "begin_wavelength": 400,
+        "end_wavelength": 2500,
+        "output_bandwidth": 10,
+        "output_spectra_signal": "absorb",
+        "indicator_array": [
+          "c-org",
+          "n-tot",
+          "ec",
+          "ph-water",
+          "clay",
+          "silt",
+          "sand"
+        ],
+        "covariate_array": [
+          "landcover",
+          "landuse",
+          "biogeo16",
+          "soil texture usda major group"
+        ],
+        "covariate_rank": "family",
+        "output_root_fp": "./project_synthetic/data",
+        "output_name": "synthetic_validation_10nm"
+      }
+    }
+  ]
+}

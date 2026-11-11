@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "parameters": {
+        "process": "manage_reference_soil_group",
+        "tabular_data_path": "import_data/utility/landscape/excel/reference_soil_group.xlsx",
+        "dst_path": "import_data/utility/landscape/manage_process"
+      }
+    }
+  ]
+}

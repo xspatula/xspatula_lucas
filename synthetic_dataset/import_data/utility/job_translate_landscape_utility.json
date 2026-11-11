@@ -1,0 +1,7 @@
+{
+  "process": {
+    "job_folder": "import_data/utility/landscape",
+    "process_sub_folder": "process",
+    "pilot_file": "translate_landscape_utility.txt"
+  }
+}

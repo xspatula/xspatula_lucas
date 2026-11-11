@@ -1,0 +1,11 @@
+###########################################
+##### SYNTHETIC DATASET METADATA ##########
+##### excel -> database in one step ######
+###########################################
+
+# order matters: source, person, dataset, campaign, sampling_log
+data_source.json
+person.json
+dataset.json
+campaign.json
+sampling_log.json

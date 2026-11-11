@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "translate_tabular_data",
+      "parameters": {
+        "process": "manage_quantity",
+        "tabular_data_path": "import_data/utility/observation/excel/quantity.xlsx",
+        "dst_path": "import_data/utility/observation/manage_process"
+      }
+    }
+  ]
+}

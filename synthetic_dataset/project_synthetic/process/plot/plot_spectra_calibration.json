@@ -1,0 +1,18 @@
+{
+  "process": [
+    {
+      "process": "plot_spectra",
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_calibration_10nm",
+        "chemometrics_array": [
+          "snv",
+          "meancentring"
+        ],
+        "colormap": "default",
+        "max_spectra": 100,
+        "show": true,
+        "save": true
+      }
+    }
+  ]
+}

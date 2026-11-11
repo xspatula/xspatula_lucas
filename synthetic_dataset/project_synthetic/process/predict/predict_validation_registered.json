@@ -1,0 +1,16 @@
+{
+  "process": [
+    {
+      "process": "predict_independent",
+      "overwrite": true,
+      "parameters": {
+        "project_root_fp": "./project_synthetic/data/compiled/synthetic_validation_10nm",
+        "dataframe": "synthetic_validation_10nm",
+        "model_array": [
+          "synthetic_c-org_plsr"
+        ],
+        "dst_fp": "./project_synthetic/data/predictions/synthetic_validation_10nm_registered"
+      }
+    }
+  ]
+}

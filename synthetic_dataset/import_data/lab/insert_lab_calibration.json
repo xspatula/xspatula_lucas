@@ -1,0 +1,13 @@
+{
+  "process": [
+    {
+      "process": "insert_tabular_data",
+      "overwrite": true,
+      "parameters": {
+        "process": "manage_observation",
+        "tabular_data_path": "import_data/lab/excel/lab_calibration.xlsx",
+        "dst_path": "import_data/lab/staging/calibration"
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "process": {
+    "job_folder": "import_data/utility/landscape",
+    "process_sub_folder": "insert_process",
+    "pilot_file": "insert_landscape_utility.txt"
+  }
+}

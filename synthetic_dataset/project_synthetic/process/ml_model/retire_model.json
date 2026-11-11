@@ -1,0 +1,12 @@
+{
+  "process": [
+    {
+      "process": "retire_model",
+      "parameters": {
+        "model_array": [
+          "synthetic_c-org_plsr"
+        ]
+      }
+    }
+  ]
+}
