@@ -5,7 +5,6 @@
       "parameters": {
         "project_root_fp": "./project_lucas_2009/data/spectra/foss-xds-rca/ds2/lucas_eu_2009",
         "filter": "lowess",
-        "chemometrics": "default",
         "chemometrics_array": [
           "derivative"
         ],
