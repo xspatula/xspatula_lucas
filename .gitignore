@@ -139,10 +139,6 @@ synthetic_dataset/import_data/sample/excel/
 synthetic_dataset/import_data/landscape/excel/
 synthetic_dataset/import_data/observation_log/excel/
 synthetic_dataset/user_management/user/manage_process/
-# obsolete, to be deleted (old database name, plaintext passwords; switch_db moved to setup/)
-synthetic_dataset/setup/
-synthetic_dataset/scheme_synthetic_admin.json
-synthetic_dataset/switch_db.py
 
 # =============================================================
 # Scheme files holding plaintext passwords - use *_netrc_id instead
